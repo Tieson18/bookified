@@ -1,8 +1,6 @@
-import Image from "next/image";
 import { Search } from "lucide-react";
 
 import { sampleBooks } from "@/lib/constant";
-import Link from "next/link";
 import BookCard from "./BookCard";
 
 export function RecentBooksSection() {
