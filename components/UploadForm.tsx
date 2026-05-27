@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { ImageIcon, Upload, X, type LucideIcon } from "lucide-react"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
+import * as React from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { ImageIcon, Upload, X, type LucideIcon } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
-import LoadingOverlay from "@/components/LoadingOverlay"
+import LoadingOverlay from "@/components/LoadingOverlay";
 import {
   Form,
   FormControl,
@@ -14,27 +14,27 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/form";
+import { cn } from "@/lib/utils";
 
-const MAX_PDF_FILE_SIZE = 50 * 1024 * 1024
+const MAX_PDF_FILE_SIZE = 50 * 1024 * 1024;
 
-const VOICE_IDS = ["dave", "daniel", "chris", "rachel", "sarah"] as const
+const VOICE_IDS = ["dave", "daniel", "chris", "rachel", "sarah"] as const;
 
-type VoiceId = (typeof VOICE_IDS)[number]
+type VoiceId = (typeof VOICE_IDS)[number];
 
 const isFile = (value: unknown): value is File =>
-  typeof File !== "undefined" && value instanceof File
+  typeof File !== "undefined" && value instanceof File;
 
 const uploadFormSchema = z
   .object({
     pdf: z.custom<File | undefined>(
       (value) => value === undefined || isFile(value),
-      { message: "Please upload a PDF file." }
+      { message: "Please upload a PDF file." },
     ),
     coverImage: z.custom<File | undefined>(
       (value) => value === undefined || isFile(value),
-      { message: "Please upload a cover image." }
+      { message: "Please upload a cover image." },
     ),
     title: z.string().trim().min(1, "Title is required."),
     author: z.string().trim().min(1, "Author name is required."),
@@ -46,20 +46,20 @@ const uploadFormSchema = z
         code: z.ZodIssueCode.custom,
         message: "Please upload a PDF file.",
         path: ["pdf"],
-      })
-      return
+      });
+      return;
     }
 
     const isPdf =
       values.pdf.type === "application/pdf" ||
-      values.pdf.name.toLowerCase().endsWith(".pdf")
+      values.pdf.name.toLowerCase().endsWith(".pdf");
 
     if (!isPdf) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "File must be a PDF.",
         path: ["pdf"],
-      })
+      });
     }
 
     if (values.pdf.size > MAX_PDF_FILE_SIZE) {
@@ -67,7 +67,7 @@ const uploadFormSchema = z
         code: z.ZodIssueCode.custom,
         message: "PDF file must be 50MB or less.",
         path: ["pdf"],
-      })
+      });
     }
 
     if (values.coverImage && !values.coverImage.type.startsWith("image/")) {
@@ -75,17 +75,17 @@ const uploadFormSchema = z
         code: z.ZodIssueCode.custom,
         message: "Cover image must be an image file.",
         path: ["coverImage"],
-      })
+      });
     }
-  })
+  });
 
-type UploadFormValues = z.infer<typeof uploadFormSchema>
+type UploadFormValues = z.infer<typeof uploadFormSchema>;
 
 type Voice = {
-  id: VoiceId
-  name: string
-  description: string
-}
+  id: VoiceId;
+  name: string;
+  description: string;
+};
 
 const VOICE_GROUPS: { label: string; voices: Voice[] }[] = [
   {
@@ -123,28 +123,31 @@ const VOICE_GROUPS: { label: string; voices: Voice[] }[] = [
       },
     ],
   },
-]
+];
 
-type FileDropzoneProps = React.ComponentPropsWithoutRef<"div"> & {
-  inputId: string
-  accept: string
-  file?: File
-  icon: LucideIcon
-  uploadText: string
-  hint: string
-  onBlur?: () => void
-  onFileChange: (file: File | undefined) => void
-}
+type FileDropzoneProps = Omit<
+  React.ComponentPropsWithoutRef<"input">,
+  "accept" | "className" | "id" | "onChange" | "type" | "value"
+> & {
+  inputId: string;
+  accept: string;
+  file?: File;
+  icon: LucideIcon;
+  uploadText: string;
+  hint: string;
+  className?: string;
+  onFileChange: (file: File | undefined) => void;
+};
 
 const formatFileSize = (size: number) => {
-  const sizeInMb = size / 1024 / 1024
+  const sizeInMb = size / 1024 / 1024;
 
   if (sizeInMb >= 1) {
-    return `${sizeInMb >= 10 ? sizeInMb.toFixed(0) : sizeInMb.toFixed(1)}MB`
+    return `${sizeInMb >= 10 ? sizeInMb.toFixed(0) : sizeInMb.toFixed(1)}MB`;
   }
 
-  return `${Math.max(1, Math.round(size / 1024))}KB`
-}
+  return `${Math.max(1, Math.round(size / 1024))}KB`;
+};
 
 const FileDropzone = ({
   inputId,
@@ -156,33 +159,29 @@ const FileDropzone = ({
   onBlur,
   onFileChange,
   className,
-  ...props
+  ...inputProps
 }: FileDropzoneProps) => {
-  const inputRef = React.useRef<HTMLInputElement>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   const handleSelectedFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0]
-
-    if (selectedFile) {
-      onFileChange(selectedFile)
-    }
-  }
+    onFileChange(event.target.files?.[0]);
+  };
 
   const handleRemoveFile = () => {
-    onFileChange(undefined)
+    onFileChange(undefined);
 
     if (inputRef.current) {
-      inputRef.current.value = ""
+      inputRef.current.value = "";
     }
-  }
+  };
 
   return (
-    <div className={cn("relative", className)} {...props}>
+    <div className={cn("relative", className)}>
       <button
         type="button"
         className={cn(
           "upload-dropzone w-full border border-dashed border-[#8B7355]/45 px-4 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#663820]/35",
-          file && "upload-dropzone-uploaded"
+          file && "upload-dropzone-uploaded",
         )}
         onClick={() => inputRef.current?.click()}
       >
@@ -204,6 +203,7 @@ const FileDropzone = ({
         )}
       </button>
       <input
+        {...inputProps}
         ref={inputRef}
         id={inputId}
         type="file"
@@ -223,8 +223,8 @@ const FileDropzone = ({
         </button>
       ) : null}
     </div>
-  )
-}
+  );
+};
 
 const UploadForm = () => {
   const form = useForm<UploadFormValues>({
@@ -236,11 +236,11 @@ const UploadForm = () => {
       author: "",
       voice: "rachel",
     },
-  })
+  });
 
   const onSubmit = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 900))
-  }
+    await new Promise((resolve) => setTimeout(resolve, 900));
+  };
 
   return (
     <div className="new-book-wrapper">
@@ -253,7 +253,9 @@ const UploadForm = () => {
             name="pdf"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="form-label">Book PDF File</FormLabel>
+                <FormLabel htmlFor="book-pdf-file" className="form-label">
+                  Book PDF File
+                </FormLabel>
                 <FormControl>
                   <FileDropzone
                     inputId="book-pdf-file"
@@ -276,7 +278,9 @@ const UploadForm = () => {
             name="coverImage"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="form-label">Cover Image (Optional)</FormLabel>
+                <FormLabel htmlFor="book-cover-image" className="form-label">
+                  Cover Image (Optional)
+                </FormLabel>
                 <FormControl>
                   <FileDropzone
                     inputId="book-cover-image"
@@ -347,17 +351,17 @@ const UploadForm = () => {
                         </legend>
                         <div className="voice-selector-options flex-col sm:flex-row">
                           {group.voices.map((voice) => {
-                            const selected = field.value === voice.id
+                            const selected = field.value === voice.id;
 
                             return (
                               <label
                                 key={voice.id}
                                 htmlFor={`voice-${voice.id}`}
                                 className={cn(
-                                  "voice-selector-option min-h-[92px] items-start justify-start",
+                                  "voice-selector-option min-h-23 items-start justify-start",
                                   selected
                                     ? "voice-selector-option-selected"
-                                    : "voice-selector-option-default"
+                                    : "voice-selector-option-default",
                                 )}
                               >
                                 <input
@@ -379,7 +383,7 @@ const UploadForm = () => {
                                   </span>
                                 </span>
                               </label>
-                            )
+                            );
                           })}
                         </div>
                       </fieldset>
@@ -401,7 +405,7 @@ const UploadForm = () => {
         </form>
       </Form>
     </div>
-  )
-}
+  );
+};
 
-export default UploadForm
+export default UploadForm;

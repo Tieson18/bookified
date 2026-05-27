@@ -1,5 +1,4 @@
 import UploadForm from "@/components/UploadForm";
-// import { ImageIcon, Upload } from "lucide-react";
 
 export default function NewBookPage() {
   return (
@@ -10,7 +9,7 @@ export default function NewBookPage() {
             Add a New Book
           </h1>
           <p className="mt-4 text-[17px] leading-6 text-[#4f5360]">
-            Upload a PDF to generate your interactive interview
+            Upload a PDF to generate your interactive reading experience
           </p>
           <p className="mt-4 text-[13px] leading-5 text-[#3f3f3f]">
             5 of 10 books used (Upgrade)
