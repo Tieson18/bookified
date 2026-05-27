@@ -1,36 +1,28 @@
+import { ClerkProvider } from "@clerk/nextjs";
+import { shadcn } from "@clerk/ui/themes";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, IBM_Plex_Serif, Inter, Mona_Sans } from "next/font/google";
-import "./globals.css";
-import { cn } from "@/lib/utils";
+import { IBM_Plex_Serif, Mona_Sans } from "next/font/google";
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
+import "./globals.css";
+import Navbar from "@/components/Navbar";
 
 const ibmPlexSerif = IBM_Plex_Serif({
   variable: "--font-ibm-plex-serif",
   subsets: ["latin"],
-  weight:['400','500','600','700'],
-  display: 'swap'
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 const monaSans = Mona_Sans({
   variable: "--font-mona-sans",
   subsets: ["latin"],
-  display: 'swap'
+  display: "swap",
 });
-
-// const geistSans = Geist({
-//   variable: "--font-geist-sans",
-//   subsets: ["latin"],
-// });
-
-// const geistMono = Geist_Mono({
-//   variable: "--font-geist-mono",
-//   subsets: ["latin"],
-// });
 
 export const metadata: Metadata = {
   title: "Bookified",
-  description: "Transform your books into interactive AI coversations. Upload PDFs, and chat with your books using voice.",
+  description:
+    "Transform your books into interactive AI conversations. Upload PDFs, and chat with your books using voice",
 };
 
 export default function RootLayout({
@@ -41,9 +33,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full", "antialiased", ibmPlexSerif.variable, monaSans.variable, "font-sans", inter.variable)}
+      className={`${ibmPlexSerif.variable} ${monaSans.variable} h-full antialiased`}
     >
-      <body className="relative font-sans min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ClerkProvider appearance={{ theme: shadcn }}>
+          <Navbar />
+          {children}
+        </ClerkProvider>
+      </body>
     </html>
   );
 }

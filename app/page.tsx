@@ -1,9 +1,11 @@
-import React from 'react'
+import { HeroSection } from "@/components/HeroSection";
+import { RecentBooksSection } from "@/components/RecentBooksSection";
 
-const page = () => {
+export default function Page() {
   return (
-    <div><h1 className="text-2xl underline">Bookified</h1></div>
-  )
+    <main className="min-h-screen bg-[var(--bg-primary)] pt-[82px] pb-16">
+      <HeroSection />
+      <RecentBooksSection />
+    </main>
+  );
 }
-
-export default page
