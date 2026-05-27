@@ -18,11 +18,11 @@ const BookCard = ({ title, author, coverURL, slug }: BookCardProps) => {
               sizes="(min-width: 1280px) 150px, (min-width: 768px) 140px, 45vw"
             />
           </div>
+          <figcaption className="book-card-meta">
+            <h3 className="book-card-title">{title}</h3>
+            <p className="book-card-author">{author}</p>
+          </figcaption>
         </figure>
-        <figcaption className="book-card-meta">
-          <h3 className="book-card-title">{title}</h3>
-          <p className="book-card-author">{author}</p>
-        </figcaption>
       </article>
     </Link>
   );

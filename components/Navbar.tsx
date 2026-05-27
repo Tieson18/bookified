@@ -27,7 +27,7 @@ const Navbar = () => {
   const { user } = useUser();
   return (
     <header className="w-full fixed z-50 bg-(--bg-primary)">
-      <div className="navbar-height mx-auto flex w-full max-w-[997px] items-center justify-between px-4 py-4 lg:px-0">
+      <div className="navbar-height mx-auto flex w-full max-w-249.25 items-center justify-between px-4 py-4 lg:px-0">
         <Link href="/" className="flex gap-0.5 items-center">
           <Image
             src="/assets/logo.png"
