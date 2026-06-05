@@ -3,8 +3,10 @@
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ImageIcon, Upload, X, type LucideIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { useAuth } from "@clerk/nextjs";
+import { toast } from "sonner";
 
 import LoadingOverlay from "@/components/LoadingOverlay";
 import {
@@ -15,115 +17,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { cn } from "@/lib/utils";
-
-const MAX_PDF_FILE_SIZE = 50 * 1024 * 1024;
-
-const VOICE_IDS = ["dave", "daniel", "chris", "rachel", "sarah"] as const;
-
-type VoiceId = (typeof VOICE_IDS)[number];
-
-const isFile = (value: unknown): value is File =>
-  typeof File !== "undefined" && value instanceof File;
-
-const uploadFormSchema = z
-  .object({
-    pdf: z.custom<File | undefined>(
-      (value) => value === undefined || isFile(value),
-      { message: "Please upload a PDF file." },
-    ),
-    coverImage: z.custom<File | undefined>(
-      (value) => value === undefined || isFile(value),
-      { message: "Please upload a cover image." },
-    ),
-    title: z.string().trim().min(1, "Title is required."),
-    author: z.string().trim().min(1, "Author name is required."),
-    voice: z.enum(VOICE_IDS),
-  })
-  .superRefine((values, ctx) => {
-    if (!values.pdf) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Please upload a PDF file.",
-        path: ["pdf"],
-      });
-      return;
-    }
-
-    const isPdf =
-      values.pdf.type === "application/pdf" ||
-      values.pdf.name.toLowerCase().endsWith(".pdf");
-
-    if (!isPdf) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "File must be a PDF.",
-        path: ["pdf"],
-      });
-    }
-
-    if (values.pdf.size > MAX_PDF_FILE_SIZE) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "PDF file must be 50MB or less.",
-        path: ["pdf"],
-      });
-    }
-
-    if (values.coverImage && !values.coverImage.type.startsWith("image/")) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Cover image must be an image file.",
-        path: ["coverImage"],
-      });
-    }
-  });
-
-type UploadFormValues = z.infer<typeof uploadFormSchema>;
-
-type Voice = {
-  id: VoiceId;
-  name: string;
-  description: string;
-};
-
-const VOICE_GROUPS: { label: string; voices: Voice[] }[] = [
-  {
-    label: "Male Voices",
-    voices: [
-      {
-        id: "dave",
-        name: "Dave",
-        description: "Young male, British-Essex, casual & conversational",
-      },
-      {
-        id: "daniel",
-        name: "Daniel",
-        description: "Middle-aged male, British, authoritative but warm",
-      },
-      {
-        id: "chris",
-        name: "Chris",
-        description: "Male, casual & easy-going",
-      },
-    ],
-  },
-  {
-    label: "Female Voices",
-    voices: [
-      {
-        id: "rachel",
-        name: "Rachel",
-        description: "Young female, American, calm & clear",
-      },
-      {
-        id: "sarah",
-        name: "Sarah",
-        description: "Young female, American, soft & approachable",
-      },
-    ],
-  },
-];
+import { Input } from "@/components/ui/input";
+import { DEFAULT_VOICE, voiceOptions } from "@/lib/constant";
+import { cn } from "@/lib/utils/utils";
+import { UploadSchema, type UploadFormValues } from "@/lib/zod";
+import { uploadBook as runBookUpload } from "@/lib/services/upload/book-upload.service";
 
 type FileDropzoneProps = Omit<
   React.ComponentPropsWithoutRef<"input">,
@@ -131,12 +29,12 @@ type FileDropzoneProps = Omit<
 > & {
   inputId: string;
   accept: string;
-  file?: File;
+  files?: FileList;
   icon: LucideIcon;
   uploadText: string;
   hint: string;
   className?: string;
-  onFileChange: (file: File | undefined) => void;
+  onFilesChange: (files: FileList | undefined) => void;
 };
 
 const formatFileSize = (size: number) => {
@@ -149,123 +47,219 @@ const formatFileSize = (size: number) => {
   return `${Math.max(1, Math.round(size / 1024))}KB`;
 };
 
-const FileDropzone = ({
-  inputId,
-  accept,
-  file,
-  icon: Icon,
-  uploadText,
-  hint,
-  onBlur,
-  onFileChange,
-  className,
-  ...inputProps
-}: FileDropzoneProps) => {
-  const inputRef = React.useRef<HTMLInputElement>(null);
+const FileDropzone = React.forwardRef<HTMLInputElement, FileDropzoneProps>(
+  (
+    {
+      inputId,
+      accept,
+      files,
+      icon: Icon,
+      uploadText,
+      hint,
+      onBlur,
+      onFilesChange,
+      className,
+      disabled,
+      ...inputProps
+    },
+    forwardedRef,
+  ) => {
+    const inputRef = React.useRef<HTMLInputElement | null>(null);
+    const selectedFile = files?.item(0) ?? undefined;
 
-  const handleSelectedFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    onFileChange(event.target.files?.[0]);
-  };
+    const setInputRefs = React.useCallback(
+      (node: HTMLInputElement | null) => {
+        inputRef.current = node;
 
-  const handleRemoveFile = () => {
-    onFileChange(undefined);
+        if (typeof forwardedRef === "function") {
+          forwardedRef(node);
+          return;
+        }
 
-    if (inputRef.current) {
-      inputRef.current.value = "";
-    }
-  };
+        if (forwardedRef) {
+          forwardedRef.current = node;
+        }
+      },
+      [forwardedRef],
+    );
 
-  return (
-    <div className={cn("relative", className)}>
-      <button
-        type="button"
-        className={cn(
-          "upload-dropzone w-full border border-dashed border-[#8B7355]/45 px-4 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#663820]/35",
-          file && "upload-dropzone-uploaded",
-        )}
-        onClick={() => inputRef.current?.click()}
-      >
-        <Icon className="upload-dropzone-icon" aria-hidden="true" />
-        {file ? (
-          <>
-            <span className="upload-dropzone-text max-w-full truncate px-8">
-              {file.name}
-            </span>
-            <span className="upload-dropzone-hint">
-              {formatFileSize(file.size)}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="upload-dropzone-text">{uploadText}</span>
-            <span className="upload-dropzone-hint">{hint}</span>
-          </>
-        )}
-      </button>
-      <input
-        {...inputProps}
-        ref={inputRef}
-        id={inputId}
-        type="file"
-        accept={accept}
-        className="sr-only"
-        onBlur={onBlur}
-        onChange={handleSelectedFile}
-      />
-      {file ? (
+    React.useEffect(() => {
+      if (!selectedFile && inputRef.current) {
+        inputRef.current.value = "";
+      }
+    }, [selectedFile]);
+
+    const handleSelectedFiles = (
+      event: React.ChangeEvent<HTMLInputElement>,
+    ) => {
+      onFilesChange(event.currentTarget.files ?? undefined);
+    };
+
+    const handleRemoveFile = () => {
+      onFilesChange(undefined);
+
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
+    };
+
+    return (
+      <div className={cn("relative", className)}>
         <button
           type="button"
-          className="upload-dropzone-remove absolute right-4 top-4 rounded-full bg-white/80"
-          aria-label={`Remove ${file.name}`}
-          onClick={handleRemoveFile}
+          disabled={disabled}
+          className={cn(
+            "upload-dropzone w-full border border-dashed border-[#8B7355]/45 px-4 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#663820]/35",
+            selectedFile && "upload-dropzone-uploaded",
+            disabled && "cursor-not-allowed opacity-70",
+          )}
+          onClick={() => inputRef.current?.click()}
         >
-          <X className="h-4 w-4" aria-hidden="true" />
+          <Icon className="upload-dropzone-icon" aria-hidden="true" />
+          {selectedFile ? (
+            <>
+              <span className="upload-dropzone-text max-w-full truncate px-8">
+                {selectedFile.name}
+              </span>
+              <span className="upload-dropzone-hint">
+                {formatFileSize(selectedFile.size)}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="upload-dropzone-text">{uploadText}</span>
+              <span className="upload-dropzone-hint">{hint}</span>
+            </>
+          )}
         </button>
-      ) : null}
-    </div>
-  );
-};
+        <Input
+          {...inputProps}
+          ref={setInputRefs}
+          id={inputId}
+          type="file"
+          accept={accept}
+          className="sr-only"
+          disabled={disabled}
+          onBlur={onBlur}
+          onChange={handleSelectedFiles}
+        />
+        {selectedFile ? (
+          <button
+            type="button"
+            className="upload-dropzone-remove absolute right-4 top-4 rounded-full bg-white/80"
+            aria-label={`Remove ${selectedFile.name}`}
+            disabled={disabled}
+            onClick={handleRemoveFile}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    );
+  },
+);
+
+FileDropzone.displayName = "FileDropzone";
 
 const UploadForm = () => {
+  const { userId } = useAuth();
+  const router = useRouter();
+  const [isPending, startTransition] = React.useTransition();
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [loadingMessage, setLoadingMessage] = React.useState(
+    "Preparing your book for narration",
+  );
+
   const form = useForm<UploadFormValues>({
-    resolver: zodResolver(uploadFormSchema),
+    resolver: zodResolver(UploadSchema),
     defaultValues: {
       pdf: undefined,
       coverImage: undefined,
       title: "",
       author: "",
-      voice: "rachel",
+      voice: DEFAULT_VOICE,
     },
   });
 
-  const onSubmit = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 900));
+  const uploadBook = React.useCallback(
+    async (data: UploadFormValues) => {
+      if (!userId) {
+        toast.error("Please sign in to upload a book.");
+        return;
+      }
+
+      setIsUploading(true);
+      setLoadingMessage("Preparing your book for narration");
+
+      try {
+        const result = await runBookUpload({
+          values: data,
+          userId,
+          onProgress: (_stage, message) => setLoadingMessage(message),
+        });
+
+        if (!result.success) {
+          toast.error("Error:" + result.error.message);
+          return;
+        }
+
+        const bookPath = `/books/${result.data.book.slug}`;
+
+        if (result.data.status === "already-exists") {
+          toast.info("A book with this title already exists.");
+        } else {
+          toast.success("Book uploaded successfully.");
+        }
+
+        form.reset();
+        router.push(bookPath);
+        router.refresh();
+      } catch (error) {
+        console.error("[upload] Unexpected upload form failure", error);
+        toast.error("An unexpected error occurred. Please try again later.");
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [form, router, userId],
+  );
+
+  const onSubmit = (data: UploadFormValues) => {
+    startTransition(() => {
+      void uploadBook(data);
+    });
   };
+
+  const isBusy = isUploading || isPending;
 
   return (
     <div className="new-book-wrapper">
-      {form.formState.isSubmitting ? <LoadingOverlay /> : null}
+      {isBusy ? (
+        <LoadingOverlay title="Uploading book" message={loadingMessage} />
+      ) : null}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <FormField
             control={form.control}
             name="pdf"
-            render={({ field }) => (
+            render={({ field: { value, onChange, ref, ...field } }) => (
               <FormItem>
                 <FormLabel htmlFor="book-pdf-file" className="form-label">
                   Book PDF File
                 </FormLabel>
                 <FormControl>
                   <FileDropzone
+                    {...field}
+                    ref={ref}
                     inputId="book-pdf-file"
                     accept="application/pdf,.pdf"
-                    file={field.value}
+                    files={value}
                     icon={Upload}
                     uploadText="Click to upload PDF"
                     hint="PDF file (max 50MB)"
-                    onBlur={field.onBlur}
-                    onFileChange={field.onChange}
+                    disabled={isBusy}
+                    onFilesChange={onChange}
                   />
                 </FormControl>
                 <FormMessage />
@@ -276,21 +270,23 @@ const UploadForm = () => {
           <FormField
             control={form.control}
             name="coverImage"
-            render={({ field }) => (
+            render={({ field: { value, onChange, ref, ...field } }) => (
               <FormItem>
                 <FormLabel htmlFor="book-cover-image" className="form-label">
                   Cover Image (Optional)
                 </FormLabel>
                 <FormControl>
                   <FileDropzone
+                    {...field}
+                    ref={ref}
                     inputId="book-cover-image"
                     accept="image/*"
-                    file={field.value}
+                    files={value}
                     icon={ImageIcon}
                     uploadText="Click to upload cover image"
                     hint="Leave empty to auto-generate from PDF"
-                    onBlur={field.onBlur}
-                    onFileChange={field.onChange}
+                    disabled={isBusy}
+                    onFilesChange={onChange}
                   />
                 </FormControl>
                 <FormMessage />
@@ -308,6 +304,7 @@ const UploadForm = () => {
                   <input
                     className="form-input"
                     placeholder="ex: Rich Dad Poor Dad"
+                    disabled={isBusy}
                     {...field}
                   />
                 </FormControl>
@@ -326,6 +323,7 @@ const UploadForm = () => {
                   <input
                     className="form-input"
                     placeholder="ex: Robert Kiyosaki"
+                    disabled={isBusy}
                     {...field}
                   />
                 </FormControl>
@@ -344,7 +342,7 @@ const UploadForm = () => {
                 </FormLabel>
                 <FormControl>
                   <div className="space-y-4">
-                    {VOICE_GROUPS.map((group) => (
+                    {voiceOptions.map((group) => (
                       <fieldset key={group.label} className="space-y-2">
                         <legend className="text-sm font-medium text-[#666]">
                           {group.label}
@@ -362,6 +360,7 @@ const UploadForm = () => {
                                   selected
                                     ? "voice-selector-option-selected"
                                     : "voice-selector-option-default",
+                                  isBusy && "cursor-not-allowed opacity-70",
                                 )}
                               >
                                 <input
@@ -370,6 +369,7 @@ const UploadForm = () => {
                                   name={field.name}
                                   value={voice.id}
                                   checked={selected}
+                                  disabled={isBusy}
                                   onBlur={field.onBlur}
                                   onChange={() => field.onChange(voice.id)}
                                   className="mt-1 h-4 w-4 shrink-0 accent-[#663820]"
@@ -398,7 +398,7 @@ const UploadForm = () => {
           <button
             type="submit"
             className="form-btn disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={form.formState.isSubmitting}
+            disabled={isBusy}
           >
             Begin Synthesis
           </button>

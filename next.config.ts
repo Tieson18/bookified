@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
         hostname: "covers.openlibrary.org",
         pathname: "/b/**",
       },
+      {
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+      },
     ],
   },
   turbopack: {
