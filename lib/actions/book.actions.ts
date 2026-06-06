@@ -201,10 +201,10 @@ export async function persistUploadedBook({
   }
 
   if (
-    !book.fileBlobKey ||
-    !book.coverBlobKey ||
-    !book.fileURL ||
-    !book.coverURL
+    !book.fileBlobKey?.trim() ||
+    !book.coverBlobKey?.trim() ||
+    !book.fileURL?.trim() ||
+    !book.coverURL?.trim()
   ) {
     const cleanup = await cleanupBlobAssets(uploadedPathnames);
 
