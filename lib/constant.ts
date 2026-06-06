@@ -110,16 +110,19 @@ export const voiceOptions = [
         id: "dave",
         name: "Dave",
         description: "Young male, British-Essex, casual & conversational",
+        elevenLabsId: "AZnzlk1XvdvUeBnXmlld",
       },
       {
         id: "daniel",
         name: "Daniel",
         description: "Middle-aged male, British, authoritative but warm",
+        elevenLabsId: "ErXwobaYiN019PkySvjV",
       },
       {
         id: "chris",
         name: "Chris",
         description: "Male, casual & easy-going",
+        elevenLabsId: "21m00Tcm4TlvDq8ikWAM",
       },
     ],
   },
@@ -130,15 +133,19 @@ export const voiceOptions = [
         id: "rachel",
         name: "Rachel",
         description: "Young female, American, calm & clear",
+        elevenLabsId: "EXAVITQu4vr4xnSDxMaL",
       },
       {
         id: "sarah",
         name: "Sarah",
         description: "Young female, American, soft & approachable",
+        elevenLabsId: "MFkSMS8S6bi3V1DFyHYw",
       },
     ],
   },
 ];
+
+export const ELEVENLABS_VOICE_MODEL = "eleven_monolingual_v1";
 
 // Voice categories for the selector UI
 export const voiceCategories = {

@@ -1,6 +1,5 @@
 import "dotenv/config";
 
-import { setServers } from "node:dns";
 import mongoose, { Mongoose } from "mongoose";
 
 const FALLBACK_DNS_SERVERS = ["1.1.1.1", "8.8.8.8"];
@@ -27,21 +26,16 @@ const getMongoUri = () => {
   return uri;
 };
 
-const configureDnsForMongoSrv = (uri: string) => {
+const configureDnsForMongoSrv = (uri: string): string[] | undefined => {
   if (!uri.startsWith("mongodb+srv://")) {
-    return;
+    return undefined;
   }
 
   const configuredServers = process.env.MONGODB_DNS_SERVERS?.split(",")
     .map((server) => server.trim())
     .filter(Boolean);
 
-  if (configuredServers?.length) {
-    setServers(configuredServers);
-    return;
-  }
-
-  setServers(FALLBACK_DNS_SERVERS);
+  return configuredServers?.length ? configuredServers : FALLBACK_DNS_SERVERS;
 };
 
 export const connectDB = async () => {
@@ -52,12 +46,13 @@ export const connectDB = async () => {
 
   if (!cached.promise) {
     const dbUri = getMongoUri();
-    configureDnsForMongoSrv(dbUri);
+    const dnsServers = configureDnsForMongoSrv(dbUri);
 
     console.info("Connecting to MongoDB...");
     const opts: mongoose.ConnectOptions = {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
+      ...(dnsServers ? { dnsServers } : {}),
     };
 
     cached.promise = mongoose

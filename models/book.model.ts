@@ -18,6 +18,9 @@ const BookSchema = new Schema<IBook>(
   { timestamps: true },
 );
 
+BookSchema.index({ clerkId: 1, createdAt: -1 });
+BookSchema.index({ clerkId: 1, slug: 1 }, { unique: true });
+
 // Use existing model if it exists to prevent OverwriteModelError in development
 const BookModel = models.Book || model<IBook>("Book", BookSchema);
 

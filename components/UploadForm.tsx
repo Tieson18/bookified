@@ -199,7 +199,7 @@ const UploadForm = () => {
         });
 
         if (!result.success) {
-          toast.error("Error:" + result.error.message);
+          toast.error(`Error: ${result.error.message}`);
           return;
         }
 

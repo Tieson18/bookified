@@ -7,10 +7,9 @@ import {
   MAX_FILE_SIZE,
   MAX_IMAGE_SIZE,
 } from "@/lib/constant";
+import { UploadAssetKind } from "@/lib/services/upload/types";
 import { generateSlug } from "@/lib/utils/utils";
 import { NextResponse } from "next/server";
-
-type UploadKind = "pdf" | "cover";
 
 class UploadRouteError extends Error {
   constructor(
@@ -22,7 +21,7 @@ class UploadRouteError extends Error {
   }
 }
 
-const parseUploadKind = (clientPayload: string | null): UploadKind => {
+const parseUploadKind = (clientPayload: string | null): UploadAssetKind => {
   if (!clientPayload) {
     throw new UploadRouteError("Missing upload metadata.", 403);
   }

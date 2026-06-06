@@ -20,7 +20,9 @@ export const isAcceptedImageFile = (file: File) =>
   IMAGE_EXTENSION_PATTERN.test(file.name);
 
 export const getSafeFileExtension = (file: File, fallback: string) => {
-  const extension = file.name.split(".").pop()?.toLowerCase();
+  const dotIndex = file.name.lastIndexOf(".");
+  const extension =
+    dotIndex >= 0 ? file.name.slice(dotIndex + 1).toLowerCase() : undefined;
 
   if (extension && /^[a-z0-9]+$/.test(extension)) {
     return extension;
