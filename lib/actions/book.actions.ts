@@ -59,7 +59,9 @@ type UploadActionError = ActionError & {
   cleanup?: BlobCleanupReport;
 };
 
-export const getAllBooks = async (): Promise<ActionResult<BookSummaryRecord[]>> => {
+export const getAllBooks = async (): Promise<
+  ActionResult<BookSummaryRecord[]>
+> => {
   const { userId } = await auth();
 
   if (!userId) {
@@ -135,14 +137,10 @@ export async function checkBookExists(
   } catch (error) {
     console.error("[books] Failed to check duplicate book", { title, error });
 
-    return {
-      success: false,
-      error: toActionError(
-        error,
-        "Unable to check whether this book already exists.",
-        "BOOK_DUPLICATE_CHECK_FAILED",
-      ),
-    };
+    return fail(
+      "Unable to check whether this book already exists.",
+      "BOOK_DUPLICATE_CHECK_FAILED",
+    );
   }
 }
 
