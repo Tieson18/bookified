@@ -48,7 +48,7 @@ export function HeroSection() {
               alt="Vintage books, an open book, a globe, and a desk lamp"
               width={491}
               height={352}
-              priority
+              preload
               className="h-auto w-[265px] sm:w-[300px] lg:w-[310px]"
             />
           </div>

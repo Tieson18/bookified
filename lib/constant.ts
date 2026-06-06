@@ -102,35 +102,50 @@ export const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
 
 // 11Labs Voice IDs - Optimized for conversational AI
 // Voices selected for natural, engaging book conversations
-export const voiceOptions = {
-  // Male voices
-  dave: {
-    id: "CYw3kZ02Hs0563khs1Fj",
-    name: "Dave",
-    description: "Young male, British-Essex, casual & conversational",
+export const voiceOptions = [
+  {
+    label: "Male Voices",
+    voices: [
+      {
+        id: "dave",
+        name: "Dave",
+        description: "Young male, British-Essex, casual & conversational",
+        elevenLabsId: "AZnzlk1XvdvUeBnXmlld",
+      },
+      {
+        id: "daniel",
+        name: "Daniel",
+        description: "Middle-aged male, British, authoritative but warm",
+        elevenLabsId: "ErXwobaYiN019PkySvjV",
+      },
+      {
+        id: "chris",
+        name: "Chris",
+        description: "Male, casual & easy-going",
+        elevenLabsId: "21m00Tcm4TlvDq8ikWAM",
+      },
+    ],
   },
-  daniel: {
-    id: "onwK4e9ZLuTAKqWW03F9",
-    name: "Daniel",
-    description: "Middle-aged male, British, authoritative but warm",
+  {
+    label: "Female Voices",
+    voices: [
+      {
+        id: "rachel",
+        name: "Rachel",
+        description: "Young female, American, calm & clear",
+        elevenLabsId: "EXAVITQu4vr4xnSDxMaL",
+      },
+      {
+        id: "sarah",
+        name: "Sarah",
+        description: "Young female, American, soft & approachable",
+        elevenLabsId: "MFkSMS8S6bi3V1DFyHYw",
+      },
+    ],
   },
-  chris: {
-    id: "iP95p4xoKVk53GoZ742B",
-    name: "Chris",
-    description: "Male, casual & easy-going",
-  },
-  // Female voices
-  rachel: {
-    id: "21m00Tcm4TlvDq8ikWAM",
-    name: "Rachel",
-    description: "Young female, American, calm & clear",
-  },
-  sarah: {
-    id: "EXAVITQu4vr4xnSDxMaL",
-    name: "Sarah",
-    description: "Young female, American, soft & approachable",
-  },
-};
+];
+
+export const ELEVENLABS_VOICE_MODEL = "eleven_monolingual_v1";
 
 // Voice categories for the selector UI
 export const voiceCategories = {

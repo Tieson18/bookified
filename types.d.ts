@@ -37,14 +37,25 @@ export interface IBookSegment extends Document {
   updatedAt: Date;
 }
 
+export interface IVoiceSynthesisResult {
+  audioUrl: string;
+  durationSeconds: number;
+  status: "pending" | "success" | "failed";
+  errorMessage?: string;
+  createdAt: Date;
+}
+
 export interface IVoiceSession extends Document {
   _id: string;
   clerkId: string;
   bookId: Types.ObjectId;
+  voiceId?: string;
+  elevenLabsVoiceId?: string;
   startedAt: Date;
   endedAt?: Date;
   durationSeconds: number;
   billingPeriodStart: Date;
+  synthesisResults?: IVoiceSynthesisResult[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,7 +73,7 @@ export interface CreateBook {
   persona?: string;
   fileURL: string;
   fileBlobKey: string;
-  coverURL?: string;
+  coverURL: string;
   coverBlobKey?: string;
   fileSize: number;
 }

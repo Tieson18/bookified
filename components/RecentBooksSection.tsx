@@ -1,9 +1,12 @@
 import { Search } from "lucide-react";
-
-import { sampleBooks } from "@/lib/constant";
 import BookCard from "./BookCard";
+import { getAllBooks } from "@/lib/actions/book.actions";
 
-export function RecentBooksSection() {
+export async function RecentBooksSection() {
+  const bookResults = await getAllBooks();
+  const books = bookResults.success ? (bookResults.data ?? []) : [];
+  console.log(bookResults);
+
   return (
     <section className="mx-auto mt-[54px] w-full max-w-[997px] px-4 lg:px-0">
       <div className="library-filter-bar">
@@ -24,17 +27,28 @@ export function RecentBooksSection() {
         </label>
       </div>
 
-      <div className="library-books-grid">
-        {sampleBooks.map((book) => (
-          <BookCard
-            key={book.slug}
-            title={book.title}
-            author={book.author}
-            coverURL={book.coverURL}
-            slug={book.slug}
-          />
-        ))}
-      </div>
+      {books.length > 0 ? (
+        <div className="library-books-grid">
+          {books.map((book) => (
+            <BookCard
+              key={book.slug}
+              title={book.title}
+              author={book.author}
+              coverURL={book.coverURL}
+              slug={book.slug}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="library-empty-card text-center">
+          <h3 className="font-serif text-2xl font-semibold text-[#212a3b]">
+            No books yet
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-[#3d485e]">
+            Upload your first PDF to start building your library.
+          </p>
+        </div>
+      )}
     </section>
   );
 }
