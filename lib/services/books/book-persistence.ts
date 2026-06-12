@@ -8,6 +8,7 @@ import BookModel from "@/models/book.model";
 import BookSegmentModel from "@/models/book-segment.model";
 import type { CreateBook, TextSegment } from "@/types";
 import { generateSlug } from "@/lib/utils/utils";
+import { revalidatePath } from "next/cache";
 
 export type PersistedBookRecord = {
   id: string;
@@ -91,7 +92,9 @@ export const toBookDetailRecord = (book: BookDetailLike): BookDetailRecord => ({
   fileSize: book.fileSize,
   totalSegments: book.totalSegments,
   persona: book.persona,
-  createdAt: book.createdAt ? new Date(book.createdAt).toISOString() : undefined,
+  createdAt: book.createdAt
+    ? new Date(book.createdAt).toISOString()
+    : undefined,
 });
 
 export const toBookSegmentRecord = (
@@ -148,7 +151,9 @@ export const findBookDetailWithSegmentPreview = cache(
       };
     }
 
-    const segments = await BookSegmentModel.find({ bookId: book._id.toString() })
+    const segments = await BookSegmentModel.find({
+      bookId: book._id.toString(),
+    })
       .sort({ segmentIndex: 1 })
       .limit(limit)
       .select("_id content segmentIndex pageNumber wordCount")
@@ -218,7 +223,7 @@ export const createBookRecord = async (bookData: CreateBook) => {
     slug,
     totalSegments: 0,
   });
-
+  revalidatePath("/");
   return toBookRecord(book);
 };
 
