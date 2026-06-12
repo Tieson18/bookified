@@ -5,14 +5,13 @@ import { getAllBooks } from "@/lib/actions/book.actions";
 export async function RecentBooksSection() {
   const bookResults = await getAllBooks();
   const books = bookResults.success ? (bookResults.data ?? []) : [];
-  console.log(bookResults);
 
   return (
-    <section className="mx-auto mt-[54px] w-full max-w-[997px] px-4 lg:px-0">
+    <section className="mx-auto mt-13.5 w-full max-w-249.25 px-4 lg:px-0">
       <div className="library-filter-bar">
         <h2 className="section-title">Recent Books</h2>
 
-        <label className="library-search-wrapper h-[34px] sm:w-[258px]">
+        <label className="library-search-wrapper h-8.5 sm:w-64.5">
           <span className="sr-only">Search books</span>
           <input
             type="search"

@@ -36,7 +36,7 @@ export default function RootLayout({
       lang="en"
       className={`${ibmPlexSerif.variable} ${monaSans.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ClerkProvider
           appearance={{ elements: CLERK_AUTH_APPEARANCE_OVERRIDE }}
         >
