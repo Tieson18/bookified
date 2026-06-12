@@ -26,6 +26,7 @@ import {
 } from "@/lib/services/books/book-persistence";
 import { generateSlug } from "@/lib/utils/utils";
 import type { CreateBook, TextSegment } from "@/types";
+import { revalidatePath } from "next/cache";
 
 type UploadedAssetPayload = {
   pathname: string;
@@ -57,6 +58,8 @@ export type PersistUploadedBookResult = {
 type UploadActionError = ActionError & {
   cleanup?: BlobCleanupReport;
 };
+
+revalidatePath("/");
 
 export const getAllBooks = async (): Promise<
   ActionResult<BookSummaryRecord[]>
