@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import type { Types } from "mongoose";
 
 import { connectDB } from "@/database/mongodb";
@@ -35,6 +36,10 @@ export type BookSegmentRecord = {
   wordCount: number;
 };
 
+export type BookSegmentSearchRecord = BookSegmentRecord & {
+  score: number;
+};
+
 type BookLike = {
   _id: Types.ObjectId | string;
   slug: string;
@@ -60,6 +65,10 @@ type BookSegmentLike = {
   segmentIndex: number;
   pageNumber?: number;
   wordCount: number;
+};
+
+type BookSegmentSearchLike = BookSegmentLike & {
+  score: number;
 };
 
 export const toBookRecord = (book: BookLike): PersistedBookRecord => ({
@@ -122,6 +131,36 @@ export const findBookBySlug = async (slug: string, clerkId: string) => {
     .lean<BookDetailLike>();
 };
 
+export const findBookDetailWithSegmentPreview = cache(
+  async (slug: string, clerkId: string, limit: number = 3) => {
+    await connectDB();
+
+    const book = await BookModel.findOne({ clerkId, slug })
+      .select(
+        "_id slug title author coverURL fileURL fileSize totalSegments persona createdAt",
+      )
+      .lean<BookDetailLike>();
+
+    if (!book) {
+      return {
+        book: null,
+        segments: [],
+      };
+    }
+
+    const segments = await BookSegmentModel.find({ bookId: book._id.toString() })
+      .sort({ segmentIndex: 1 })
+      .limit(limit)
+      .select("_id content segmentIndex pageNumber wordCount")
+      .lean<BookSegmentLike[]>();
+
+    return {
+      book,
+      segments,
+    };
+  },
+);
+
 export const findBookSegmentPreview = async (
   bookId: string,
   limit: number = 3,
@@ -133,6 +172,39 @@ export const findBookSegmentPreview = async (
     .limit(limit)
     .select("_id content segmentIndex pageNumber wordCount")
     .lean<BookSegmentLike[]>();
+};
+
+export const searchBookSegments = async (
+  bookId: string,
+  query: string,
+  limit: number = 3,
+): Promise<BookSegmentSearchRecord[]> => {
+  await connectDB();
+
+  const segmentLimit = Math.min(Math.max(Math.floor(limit), 1), 10);
+  const segments = await BookSegmentModel.find({
+    bookId,
+    $text: { $search: query },
+  })
+    .select({
+      _id: 1,
+      content: 1,
+      segmentIndex: 1,
+      pageNumber: 1,
+      wordCount: 1,
+      score: { $meta: "textScore" },
+    })
+    .sort({
+      score: { $meta: "textScore" },
+      segmentIndex: 1,
+    })
+    .limit(segmentLimit)
+    .lean<BookSegmentSearchLike[]>();
+
+  return segments.map((segment) => ({
+    ...toBookSegmentRecord(segment),
+    score: segment.score,
+  }));
 };
 
 export const createBookRecord = async (bookData: CreateBook) => {

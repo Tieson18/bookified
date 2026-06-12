@@ -57,3 +57,21 @@ export const toActionError = (
   message: getErrorMessage(error, fallback),
   code,
 });
+
+export const toLoggableError = (error: unknown, fallback = "Unknown error") => {
+  if (error instanceof Error) {
+    const maybeErrorCode = (error as Error & { code?: unknown }).code;
+
+    return {
+      name: error.name,
+      message: error.message || fallback,
+      code: typeof maybeErrorCode === "string" ? maybeErrorCode : undefined,
+    };
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return { message: error };
+  }
+
+  return { message: fallback };
+};

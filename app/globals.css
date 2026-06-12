@@ -446,7 +446,7 @@
   }
 
   .vapi-transcript-wrapper {
-    @apply min-h-[400px] max-h-[60vh] flex flex-col;
+    @apply w-full min-h-[400px] max-h-[60vh] flex flex-col;
   }
 
   .vapi-cover-wrapper {

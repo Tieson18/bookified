@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import dns from "node:dns";
 import mongoose, { Mongoose } from "mongoose";
 
 const FALLBACK_DNS_SERVERS = ["1.1.1.1", "8.8.8.8"];
@@ -10,6 +11,7 @@ declare global {
     conn: Mongoose | null;
     promise: Promise<Mongoose> | null;
   };
+  var mongoSrvDnsConfigured: boolean | undefined;
 }
 
 const cached =
@@ -26,42 +28,93 @@ const getMongoUri = () => {
   return uri;
 };
 
-const configureDnsForMongoSrv = (uri: string): string[] | undefined => {
-  if (!uri.startsWith("mongodb+srv://")) {
-    return undefined;
-  }
-
-  const configuredServers = process.env.MONGODB_DNS_SERVERS?.split(",")
+const getConfiguredMongoSrvDnsServers = () => {
+  return process.env.MONGODB_DNS_SERVERS?.split(",")
     .map((server) => server.trim())
     .filter(Boolean);
+};
 
-  return configuredServers?.length ? configuredServers : FALLBACK_DNS_SERVERS;
+const configureDnsForMongoSrv = (uri: string, useFallback = false) => {
+  if (!uri.startsWith("mongodb+srv://") || global.mongoSrvDnsConfigured) {
+    return false;
+  }
+
+  const configuredServers = getConfiguredMongoSrvDnsServers();
+  const servers = configuredServers?.length
+    ? configuredServers
+    : useFallback
+      ? FALLBACK_DNS_SERVERS
+      : undefined;
+
+  if (!servers?.length) {
+    return false;
+  }
+
+  dns.setServers(servers);
+  global.mongoSrvDnsConfigured = true;
+
+  console.info("MongoDB SRV DNS servers configured", {
+    count: servers.length,
+  });
+
+  return true;
+};
+
+const isSrvDnsError = (error: unknown) => {
+  const maybeDnsError = error as {
+    code?: unknown;
+    syscall?: unknown;
+    message?: unknown;
+  };
+
+  return (
+    maybeDnsError.syscall === "querySrv" ||
+    (typeof maybeDnsError.message === "string" &&
+      maybeDnsError.message.includes("querySrv"))
+  );
+};
+
+const connectWithDnsFallback = async (
+  dbUri: string,
+  opts: mongoose.ConnectOptions,
+) => {
+  try {
+    return await mongoose.connect(dbUri, opts);
+  } catch (error) {
+    if (isSrvDnsError(error) && configureDnsForMongoSrv(dbUri, true)) {
+      console.warn(
+        "MongoDB SRV DNS lookup failed; retrying with fallback DNS servers",
+      );
+
+      return mongoose.connect(dbUri, opts);
+    }
+
+    throw error;
+  }
 };
 
 export const connectDB = async () => {
   if (cached.conn) {
-    console.info("MongoDB already connected");
     return cached.conn;
   }
 
   if (!cached.promise) {
     const dbUri = getMongoUri();
-    const dnsServers = configureDnsForMongoSrv(dbUri);
+
+    configureDnsForMongoSrv(dbUri);
 
     console.info("Connecting to MongoDB...");
     const opts: mongoose.ConnectOptions = {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
-      ...(dnsServers ? { dnsServers } : {}),
     };
 
-    cached.promise = mongoose
-      .connect(dbUri, opts)
+    cached.promise = connectWithDnsFallback(dbUri, opts)
       .then((mongoose) => {
         console.info("MongoDB connected successfully");
         return mongoose;
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error("MongoDB connection failed:", err);
         throw err;
       });

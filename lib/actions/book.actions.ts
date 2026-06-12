@@ -3,16 +3,15 @@
 import { auth } from "@clerk/nextjs/server";
 
 import type { ActionError, ActionResult } from "@/lib/result";
-import { fail, ok, toActionError } from "@/lib/result";
+import { fail, ok, toActionError, toLoggableError } from "@/lib/result";
 import {
   cleanupBlobAssets,
   type BlobCleanupReport,
 } from "@/lib/services/storage/blob-cleanup";
 import {
   createBookRecord,
-  findBookBySlug,
+  findBookDetailWithSegmentPreview,
   findBookByTitle,
-  findBookSegmentPreview,
   findBooksByClerkId,
   rollbackBookPersistence,
   saveBookSegments,
@@ -73,7 +72,7 @@ export const getAllBooks = async (): Promise<
 
     return ok(books.map(toBookSummaryRecord));
   } catch (error) {
-    console.error("Failed to fetch books", { error });
+    console.error("Failed to fetch books", toLoggableError(error));
 
     return fail(
       toActionError(error, "Unable to fetch books.").message,
@@ -92,20 +91,24 @@ export const getBookBySlug = async (
   }
 
   try {
-    const book = await findBookBySlug(slug, userId);
+    const { book, segments } = await findBookDetailWithSegmentPreview(
+      slug,
+      userId,
+    );
 
     if (!book) {
       return fail("Book not found.", "BOOK_NOT_FOUND");
     }
-
-    const segments = await findBookSegmentPreview(book._id.toString());
 
     return ok({
       book: toBookDetailRecord(book),
       segments: segments.map(toBookSegmentRecord),
     });
   } catch (error) {
-    console.error("[books] Failed to fetch book detail", { slug, error });
+    console.error("[books] Failed to fetch book detail", {
+      slug,
+      error: toLoggableError(error),
+    });
 
     return fail(
       toActionError(error, "Unable to fetch this book.").message,
@@ -135,7 +138,10 @@ export async function checkBookExists(
       book: toBookRecord(existingBook),
     });
   } catch (error) {
-    console.error("[books] Failed to check duplicate book", { title, error });
+    console.error("[books] Failed to check duplicate book", {
+      title,
+      error: toLoggableError(error),
+    });
 
     return fail(
       "Unable to check whether this book already exists.",
@@ -278,7 +284,7 @@ export async function persistUploadedBook({
   } catch (error) {
     console.error("[books] Failed to persist uploaded book", {
       title: book.title,
-      error,
+      error: toLoggableError(error),
     });
 
     await rollbackBookPersistence(createdBookId);
