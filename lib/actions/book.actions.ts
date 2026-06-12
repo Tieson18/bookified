@@ -59,8 +59,6 @@ type UploadActionError = ActionError & {
   cleanup?: BlobCleanupReport;
 };
 
-revalidatePath("/");
-
 export const getAllBooks = async (): Promise<
   ActionResult<BookSummaryRecord[]>
 > => {
@@ -279,6 +277,8 @@ export async function persistUploadedBook({
       slug: createdBook.slug,
       segmentCount: segments.length,
     });
+
+    revalidatePath("/");
 
     return ok({
       status: "created",

@@ -8,7 +8,6 @@ import BookModel from "@/models/book.model";
 import BookSegmentModel from "@/models/book-segment.model";
 import type { CreateBook, TextSegment } from "@/types";
 import { generateSlug } from "@/lib/utils/utils";
-import { revalidatePath } from "next/cache";
 
 export type PersistedBookRecord = {
   id: string;
@@ -223,7 +222,6 @@ export const createBookRecord = async (bookData: CreateBook) => {
     slug,
     totalSegments: 0,
   });
-  revalidatePath("/");
   return toBookRecord(book);
 };
 
