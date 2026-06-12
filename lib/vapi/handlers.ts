@@ -65,11 +65,14 @@ export const createErrorHandler =
     console.error("VAPI error:", error);
 
     const errorType = getString(error, "type") ?? "";
+    const isLifecycleCallError =
+      errorType.startsWith("call.") && errorType.includes("error");
 
     if (
       ["daily-error", "daily-call-join-error", "start-method-error"].includes(
         errorType,
-      )
+      ) ||
+      isLifecycleCallError
     ) {
       deps.setLimitError(
         "The voice conversation ended unexpectedly. Please try again.",

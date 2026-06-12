@@ -94,6 +94,7 @@ const VapiControls = ({
                 isActive ? "vapi-mic-btn-active" : "vapi-mic-btn-inactive"
               }`}
               aria-label={micLabel}
+              aria-pressed={isActive}
               onClick={handleMicClick}
               disabled={isStarting}
             >

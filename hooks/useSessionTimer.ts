@@ -35,6 +35,7 @@ export const useSessionTimer = (): UseSessionTimerReturn => {
       timerRef.current = null;
     }
     startedAtRef.current = null;
+    setDuration(0);
   }, []);
 
   const startTimer = useCallback(

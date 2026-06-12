@@ -45,7 +45,7 @@ const noopHandlers = (): VapiEventHandlers => ({
 
 export const useVapi = (book: VoiceBook) => {
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
-  const { duration, startTimer, clearTimer, getDuration } = useSessionTimer();
+  const { duration, startTimer, clearTimer } = useSessionTimer();
 
   const [status, setStatus] = useState<CallStatus>("idle");
   const [messages, setMessages] = useState<Messages[]>([]);
@@ -110,8 +110,6 @@ export const useVapi = (book: VoiceBook) => {
   }, [appendMessage]);
 
   const finishCall = useCallback((updateUi = true) => {
-    const finalDuration = getDuration();
-
     clearTimer();
     audioDiagnosticsCleanupRef.current?.();
     audioDiagnosticsCleanupRef.current = null;
@@ -133,10 +131,10 @@ export const useVapi = (book: VoiceBook) => {
 
     sessionIdRef.current = null;
 
-    void endVoiceSession(sessionId, finalDuration).catch((error) => {
+    void endVoiceSession(sessionId).catch((error) => {
       console.error("Error ending voice session:", error);
     });
-  }, [clearTimer, flushStreamingMessages, getDuration, updateStatus]);
+  }, [clearTimer, flushStreamingMessages, updateStatus]);
 
   useEffect(() => {
     handlersRef.current = {
@@ -208,7 +206,7 @@ export const useVapi = (book: VoiceBook) => {
       handlersRef.current.onSpeechEnd();
     };
     const onMessage = (message: unknown) => {
-      console.debug("[Vapi] message", message);
+      console.debug("[Vapi] message received");
       handlersRef.current.onMessage(message);
     };
     const onError = (error: unknown) => {
@@ -319,7 +317,7 @@ export const useVapi = (book: VoiceBook) => {
         startAttemptRef.current !== startAttempt
       ) {
         if (result.success && result.sessionId) {
-          void endVoiceSession(result.sessionId, 0);
+          void endVoiceSession(result.sessionId);
         }
         return;
       }
@@ -333,6 +331,11 @@ export const useVapi = (book: VoiceBook) => {
       }
 
       sessionIdRef.current = result.sessionId ?? null;
+      setMessages([]);
+      currentUserMessageRef.current = "";
+      currentMessageRef.current = "";
+      setCurrentUserMessage("");
+      setCurrentMessage("");
       updateStatus("starting");
 
       const vapi = getVapi();
@@ -344,6 +347,7 @@ export const useVapi = (book: VoiceBook) => {
           title: book.title,
           author: book.author,
           bookId: book.id,
+          voiceSessionId: result.sessionId,
         },
       });
 

@@ -176,6 +176,7 @@ export const findBookSegmentPreview = async (
 
 export const searchBookSegments = async (
   bookId: string,
+  clerkId: string,
   query: string,
   limit: number = 3,
 ): Promise<BookSegmentSearchRecord[]> => {
@@ -184,6 +185,7 @@ export const searchBookSegments = async (
   const segmentLimit = Math.min(Math.max(Math.floor(limit), 1), 10);
   const segments = await BookSegmentModel.find({
     bookId,
+    clerkId,
     $text: { $search: query },
   })
     .select({

@@ -4,19 +4,29 @@ import { timingSafeEqual } from "node:crypto";
 import { Types } from "mongoose";
 import { z } from "zod";
 
+import { connectDB } from "@/database/mongodb";
 import { toLoggableError } from "@/lib/result";
 import { searchBookSegments } from "@/lib/services/books/book-persistence";
+import VoiceSessionModel from "@/models/voice-session.model";
 
 export const runtime = "nodejs";
 
 const SEARCH_TOOL_NAME = "search_book";
 const SEARCH_RESULT_LIMIT = 3;
+const MAX_TOOL_CALLS = 50;
+const TOOL_CALL_CONCURRENCY = 5;
 const NO_INFORMATION_RESULT = "No information found about this topic.";
 
 const argumentsSchema = z.union([
   z.record(z.string(), z.unknown()),
   z.string(),
 ]);
+
+const artifactSchema = z
+  .object({
+    variableValues: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
 
 const toolCallSchema = z
   .object({
@@ -37,7 +47,8 @@ const requestSchema = z
     message: z
       .object({
         type: z.literal("tool-calls"),
-        toolCallList: z.array(toolCallSchema).min(1),
+        toolCallList: z.array(toolCallSchema).min(1).max(MAX_TOOL_CALLS),
+        artifact: artifactSchema.optional(),
       })
       .passthrough(),
   })
@@ -45,6 +56,14 @@ const requestSchema = z
 
 type ToolCall = z.infer<typeof toolCallSchema>;
 type ToolArguments = Record<string, unknown>;
+type SearchContext = {
+  bookId: string;
+  clerkId: string;
+};
+type VoiceSessionSearchContext = {
+  bookId: Types.ObjectId | string;
+  clerkId: string;
+};
 
 const errorResponse = (message: string, status: number) =>
   Response.json({ error: message }, { status });
@@ -129,7 +148,38 @@ const authenticateVapiRequest = (request: Request) => {
   return secretsMatch(getRequestSecret(request), expectedSecret);
 };
 
-const handleSearchBookCall = async (toolCall: ToolCall) => {
+const resolveSearchContext = async (
+  variableValues: Record<string, unknown> | undefined,
+): Promise<SearchContext | null> => {
+  const voiceSessionId = variableValues?.voiceSessionId;
+
+  if (
+    typeof voiceSessionId !== "string" ||
+    !isCanonicalObjectId(voiceSessionId)
+  ) {
+    return null;
+  }
+
+  await connectDB();
+
+  const session = await VoiceSessionModel.findById(voiceSessionId)
+    .select("bookId clerkId")
+    .lean<VoiceSessionSearchContext>();
+
+  if (!session) {
+    return null;
+  }
+
+  return {
+    bookId: session.bookId.toString(),
+    clerkId: session.clerkId,
+  };
+};
+
+const handleSearchBookCall = async (
+  toolCall: ToolCall,
+  searchContext: SearchContext,
+) => {
   const { name, arguments: args } = getToolCallDetails(toolCall);
   const normalizedName = normalizeToolName(name);
 
@@ -160,6 +210,14 @@ const handleSearchBookCall = async (toolCall: ToolCall) => {
     };
   }
 
+  if (bookId !== searchContext.bookId) {
+    return {
+      name,
+      toolCallId: toolCall.id,
+      error: "This book is not available for the current voice session.",
+    };
+  }
+
   if (!query) {
     return {
       name,
@@ -170,7 +228,8 @@ const handleSearchBookCall = async (toolCall: ToolCall) => {
 
   try {
     const segments = await searchBookSegments(
-      bookId,
+      searchContext.bookId,
+      searchContext.clerkId,
       query,
       SEARCH_RESULT_LIMIT,
     );
@@ -200,6 +259,24 @@ const handleSearchBookCall = async (toolCall: ToolCall) => {
   }
 };
 
+const handleToolCalls = async (
+  toolCalls: ToolCall[],
+  searchContext: SearchContext,
+) => {
+  const results = [];
+
+  for (let index = 0; index < toolCalls.length; index += TOOL_CALL_CONCURRENCY) {
+    const batch = toolCalls.slice(index, index + TOOL_CALL_CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map((toolCall) => handleSearchBookCall(toolCall, searchContext)),
+    );
+
+    results.push(...batchResults);
+  }
+
+  return results;
+};
+
 export async function POST(request: Request) {
   if (!process.env.VAPI_WEBHOOK_SECRET && process.env.NODE_ENV === "production") {
     console.error(
@@ -226,8 +303,17 @@ export async function POST(request: Request) {
     return errorResponse("Invalid Vapi tool-call payload.", 400);
   }
 
-  const results = await Promise.all(
-    parsedRequest.data.message.toolCallList.map(handleSearchBookCall),
+  const searchContext = await resolveSearchContext(
+    parsedRequest.data.message.artifact?.variableValues,
+  );
+
+  if (!searchContext) {
+    return errorResponse("Invalid voice session.", 401);
+  }
+
+  const results = await handleToolCalls(
+    parsedRequest.data.message.toolCallList,
+    searchContext,
   );
 
   return Response.json({ results });

@@ -35,16 +35,15 @@ const getConfiguredMongoSrvDnsServers = () => {
 };
 
 const configureDnsForMongoSrv = (uri: string, useFallback = false) => {
-  if (!uri.startsWith("mongodb+srv://") || global.mongoSrvDnsConfigured) {
+  if (
+    !uri.startsWith("mongodb+srv://") ||
+    (global.mongoSrvDnsConfigured && !useFallback)
+  ) {
     return false;
   }
 
   const configuredServers = getConfiguredMongoSrvDnsServers();
-  const servers = configuredServers?.length
-    ? configuredServers
-    : useFallback
-      ? FALLBACK_DNS_SERVERS
-      : undefined;
+  const servers = useFallback ? FALLBACK_DNS_SERVERS : configuredServers;
 
   if (!servers?.length) {
     return false;

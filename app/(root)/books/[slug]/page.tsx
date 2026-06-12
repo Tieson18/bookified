@@ -34,7 +34,7 @@ export default async function BookPage({ params }: BookPageProps) {
   const { userId, redirectToSignIn } = await auth();
 
   if (!userId) {
-    redirectToSignIn();
+    return redirectToSignIn();
   }
 
   const { slug } = await params;

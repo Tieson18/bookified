@@ -1,4 +1,4 @@
 export const getCurrentBillingPeriodStart = (): Date => {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 };

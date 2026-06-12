@@ -53,21 +53,27 @@ const Transcript = ({
           />
         ))}
 
-        {hasStreamingUserMessage ? (
-          <TranscriptBubble
-            role="user"
-            content={currentUserMessage}
-            isStreaming
-          />
-        ) : null}
+        <div
+          className="flex flex-col gap-4 sm:gap-6"
+          aria-live="polite"
+          aria-atomic="false"
+        >
+          {hasStreamingUserMessage ? (
+            <TranscriptBubble
+              role="user"
+              content={currentUserMessage}
+              isStreaming
+            />
+          ) : null}
 
-        {hasStreamingAssistantMessage ? (
-          <TranscriptBubble
-            role="assistant"
-            content={currentMessage}
-            isStreaming
-          />
-        ) : null}
+          {hasStreamingAssistantMessage ? (
+            <TranscriptBubble
+              role="assistant"
+              content={currentMessage}
+              isStreaming
+            />
+          ) : null}
+        </div>
 
         <div ref={bottomRef} />
       </div>

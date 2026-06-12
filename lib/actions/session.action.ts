@@ -52,12 +52,11 @@ export const startVoiceSession = async (
 
 export const endVoiceSession = async (
   sessionId: string,
-  durationSeconds: number,
 ): Promise<EndSessionResult> => {
   try {
     const { userId } = await auth();
 
-    if (!userId || !sessionId || !Number.isFinite(durationSeconds)) {
+    if (!userId || !sessionId) {
       return { success: false };
     }
 
@@ -65,13 +64,35 @@ export const endVoiceSession = async (
 
     const updatedSession = await VoiceSessionModel.findOneAndUpdate(
       { _id: sessionId, clerkId: userId },
-      {
-        $set: {
-          endedAt: new Date(),
-          durationSeconds: Math.max(0, Math.floor(durationSeconds)),
+      [
+        {
+          $set: {
+            endedAt: "$$NOW",
+          },
         },
+        {
+          $set: {
+            durationSeconds: {
+              $max: [
+                0,
+                {
+                  $floor: {
+                    $divide: [
+                      { $subtract: ["$endedAt", "$startedAt"] },
+                      1000,
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      {
+        new: true,
+        projection: { _id: 1 },
+        updatePipeline: true,
       },
-      { new: true, projection: { _id: 1 } },
     ).lean();
 
     return { success: Boolean(updatedSession) };
