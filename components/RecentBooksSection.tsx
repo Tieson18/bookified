@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 import BookCard from "./BookCard";
 import { getAllBooks } from "@/lib/actions/book.actions";
+export const dynamic = "force-dynamic";
 
 export async function RecentBooksSection() {
   const bookResults = await getAllBooks();
