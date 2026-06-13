@@ -381,9 +381,6 @@ const useVapi = (book: VoiceBook) => {
         if (!handled) {
           handlersRef.current.onMessage(message);
         }
-      }).catch((error) => {
-        console.error("[Vapi] Book search message dispatch failed", error);
-        handlersRef.current.onMessage(message);
       });
     };
     const onError = (error: unknown) => {
