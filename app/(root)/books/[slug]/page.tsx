@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 
 import { getBookBySlug } from "@/lib/actions/book.actions";
 import VapiControls from "@/components/VapiControls";
-import { getVoice } from "@/lib/utils/utils";
+import { DEFAULT_VOICE } from "@/lib/constant";
 
 type BookPageProps = {
   params: Promise<{ slug: string }>;
@@ -45,8 +45,7 @@ export default async function BookPage({ params }: BookPageProps) {
   }
 
   const { book } = result.data;
-  const voiceName = getVoice(book.persona)?.name ?? "Default";
-
+  const voiceName = book.persona?.trim() || DEFAULT_VOICE;
   return (
     <main className="book-page-container">
       <Link href="/" className="back-btn-floating" aria-label="Back to library">

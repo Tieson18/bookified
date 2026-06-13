@@ -15,7 +15,6 @@ const Navbar = () => {
   const navItems = [
     { label: "Library", href: "/" },
     { label: "Add New", href: "/books/new", signedInOnly: true },
-    { label: "Plans", href: "/subscriptions", signedInOnly: true },
   ];
 
   const pathName = usePathname();
