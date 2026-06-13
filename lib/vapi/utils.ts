@@ -2,6 +2,8 @@ import type {
   Role,
   VapiSpeechUpdateMessage,
   VapiStatusMessage,
+  VapiToolCall,
+  VapiToolCallsMessage,
   VapiTranscriptMessage,
 } from "./types";
 
@@ -59,7 +61,8 @@ export const isVapiTranscript = (
   }
 
   return (
-    msg.type === "transcript" &&
+    (msg.type === "transcript" ||
+      msg.type === "transcript[transcriptType='final']") &&
     isRole(msg.role) &&
     typeof msg.transcript === "string" &&
     (msg.transcriptType === "partial" || msg.transcriptType === "final")
@@ -84,6 +87,44 @@ export const isVapiStatus = (msg: unknown): msg is VapiStatusMessage =>
   isRecord(msg) &&
   msg.type === "status-update" &&
   typeof msg.status === "string";
+
+const isVapiToolCall = (value: unknown): value is VapiToolCall => {
+  if (!isRecord(value) || typeof value.id !== "string") {
+    return false;
+  }
+
+  const toolFunction = value.function;
+
+  return (
+    isRecord(toolFunction) &&
+    typeof toolFunction.name === "string" &&
+    (typeof toolFunction.arguments === "string" ||
+      isRecord(toolFunction.arguments))
+  );
+};
+
+export const isVapiToolCalls = (
+  msg: unknown,
+): msg is VapiToolCallsMessage =>
+  isRecord(msg) &&
+  msg.type === "tool-calls" &&
+  Array.isArray(msg.toolCallList) &&
+  msg.toolCallList.every(isVapiToolCall);
+
+export const parseVapiToolArguments = (
+  toolCall: VapiToolCall,
+): Record<string, unknown> | null => {
+  if (typeof toolCall.function.arguments !== "string") {
+    return toolCall.function.arguments;
+  }
+
+  try {
+    const parsed = JSON.parse(toolCall.function.arguments) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
 
 export const getErrorText = (value: unknown, depth = 0): string => {
   if (depth > 4 || value == null) {

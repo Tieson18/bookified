@@ -9,12 +9,14 @@ import {
   type BlobCleanupReport,
 } from "@/lib/services/storage/blob-cleanup";
 import {
-  createBookRecord,
+  countBooksByClerkId,
+  createBookRecordWithinQuota,
   findBookDetailWithSegmentPreview,
   findBookByTitle,
   findBooksByClerkId,
   rollbackBookPersistence,
   saveBookSegments,
+  searchBookSegments,
   toBookDetailRecord,
   toBookRecord,
   toBookSegmentRecord,
@@ -24,6 +26,8 @@ import {
   type BookSummaryRecord,
   type PersistedBookRecord,
 } from "@/lib/services/books/book-persistence";
+import { getServerSubscription } from "@/lib/subscriptions/server";
+import { SUBSCRIPTION_LIMIT_ERROR_CODES } from "@/lib/subscription-constants";
 import { generateSlug } from "@/lib/utils/utils";
 import type { CreateBook, TextSegment } from "@/types";
 import { revalidatePath } from "next/cache";
@@ -55,13 +59,17 @@ export type PersistUploadedBookResult = {
   cleanup?: BlobCleanupReport;
 };
 
+const NO_BOOK_INFORMATION_RESULT =
+  "No matching information was found in this book.";
+const MAX_BOOK_SEARCH_CONTEXT_LENGTH = 9_000;
+
 type UploadActionError = ActionError & {
   cleanup?: BlobCleanupReport;
 };
 
-export const getAllBooks = async (): Promise<
-  ActionResult<BookSummaryRecord[]>
-> => {
+export const getAllBooks = async (
+  searchQuery: string = "",
+): Promise<ActionResult<BookSummaryRecord[]>> => {
   const { userId } = await auth();
 
   if (!userId) {
@@ -69,7 +77,7 @@ export const getAllBooks = async (): Promise<
   }
 
   try {
-    const books = await findBooksByClerkId(userId);
+    const books = await findBooksByClerkId(userId, searchQuery);
 
     return ok(books.map(toBookSummaryRecord));
   } catch (error) {
@@ -118,26 +126,82 @@ export const getBookBySlug = async (
   }
 };
 
+export async function searchBookContent(
+  bookId: string,
+  query: string,
+): Promise<ActionResult<string>> {
+  const { userId } = await auth();
+  const normalizedQuery = query.trim().slice(0, 500);
+
+  if (!userId) {
+    return fail("Please sign in to search this book.", "UNAUTHORIZED");
+  }
+
+  if (!bookId.trim() || !normalizedQuery) {
+    return fail(
+      "A book and search question are required.",
+      "BOOK_SEARCH_INVALID",
+    );
+  }
+
+  try {
+    const segments = await searchBookSegments(
+      bookId,
+      userId,
+      normalizedQuery,
+      3,
+    );
+    const excerpts = segments
+      .map((segment) => segment.content.trim())
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, MAX_BOOK_SEARCH_CONTEXT_LENGTH);
+
+    return ok(excerpts || NO_BOOK_INFORMATION_RESULT);
+  } catch (error) {
+    console.error("[books] Failed to search book content", {
+      bookId,
+      query: normalizedQuery,
+      error: toLoggableError(error),
+    });
+
+    return fail(
+      "Unable to search this book right now.",
+      "BOOK_CONTENT_SEARCH_FAILED",
+    );
+  }
+}
+
 export async function checkBookExists(
   title: string,
 ): Promise<ActionResult<CheckBookExistsResult>> {
-  const { userId } = await auth();
+  const subscription = await getServerSubscription();
 
-  if (!userId) {
+  if (!subscription) {
     return fail("Please sign in to check this book.", "UNAUTHORIZED");
   }
 
   try {
+    const { userId, limits, plan } = subscription;
     const existingBook = await findBookByTitle(title, userId);
 
-    if (!existingBook) {
-      return ok({ exists: false });
+    if (existingBook) {
+      return ok({
+        exists: true,
+        book: toBookRecord(existingBook),
+      });
     }
 
-    return ok({
-      exists: true,
-      book: toBookRecord(existingBook),
-    });
+    const bookCount = await countBooksByClerkId(userId);
+
+    if (bookCount >= limits.maxBooks) {
+      return fail(
+        getBookLimitMessage(plan, limits.maxBooks),
+        SUBSCRIPTION_LIMIT_ERROR_CODES.bookLimit,
+      );
+    }
+
+    return ok({ exists: false });
   } catch (error) {
     console.error("[books] Failed to check duplicate book", {
       title,
@@ -189,10 +253,11 @@ export async function persistUploadedBook({
 }: PersistUploadedBookPayload): Promise<
   ActionResult<PersistUploadedBookResult, UploadActionError>
 > {
-  const { userId } = await auth();
+  const subscription = await getServerSubscription();
+  const userId = subscription?.userId;
   const uploadedPathnames = uploadedAssets.map((asset) => asset.pathname);
 
-  if (!userId) {
+  if (!subscription || !userId) {
     await cleanupIfScoped(undefined, uploadedPathnames);
     return failWithCleanup("Please sign in to save this book.", "UNAUTHORIZED");
   }
@@ -249,25 +314,41 @@ export async function persistUploadedBook({
     );
   }
 
-  const existingBook = await findBookByTitle(book.title, userId);
-
-  if (existingBook) {
-    const cleanup = await cleanupBlobAssets(uploadedPathnames);
-
-    return ok({
-      status: "already-exists",
-      book: toBookRecord(existingBook),
-      cleanup,
-    });
-  }
-
   let createdBookId: string | undefined;
 
   try {
-    const createdBook = await createBookRecord({
-      ...book,
-      clerkId: userId,
-    });
+    const createResult = await createBookRecordWithinQuota(
+      {
+        ...book,
+        clerkId: userId,
+      },
+      subscription.limits.maxBooks,
+    );
+
+    if (createResult.status === "already-exists") {
+      const cleanup = await cleanupBlobAssets(uploadedPathnames);
+
+      return ok({
+        status: "already-exists",
+        book: createResult.book,
+        cleanup,
+      });
+    }
+
+    if (createResult.status === "limit-reached") {
+      const cleanup = await cleanupBlobAssets(uploadedPathnames);
+
+      return failWithCleanup(
+        getBookLimitMessage(
+          subscription.plan,
+          subscription.limits.maxBooks,
+        ),
+        SUBSCRIPTION_LIMIT_ERROR_CODES.bookLimit,
+        cleanup,
+      );
+    }
+
+    const createdBook = createResult.book;
     createdBookId = createdBook.id;
 
     await saveBookSegments(createdBook.id, userId, segments);
@@ -324,6 +405,9 @@ const cleanupIfScoped = async (
 
   return cleanupBlobAssets(pathnames);
 };
+
+const getBookLimitMessage = (plan: string, maxBooks: number) =>
+  `Your ${plan} plan allows up to ${maxBooks} ${maxBooks === 1 ? "book" : "books"}. Upgrade your plan to add another book.`;
 
 const failWithCleanup = (
   message: string,

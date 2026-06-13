@@ -4,8 +4,6 @@ import Transcript from "@/components/Transcript";
 import { Mic, MicOff } from "lucide-react";
 import Image from "next/image";
 
-const MAX_SESSION_SECONDS = 15 * 60;
-
 type VapiControlsBook = VoiceBook & {
   coverURL: string;
 };
@@ -49,6 +47,7 @@ const VapiControls = ({
     currentMessage,
     currentUserMessage,
     duration,
+    maxSessionMinutes,
     startSession,
     stopSession,
     clearErrors,
@@ -59,7 +58,7 @@ const VapiControls = ({
     ? "Stop voice conversation"
     : "Start voice conversation";
   const timerText = `${formatDuration(duration)}/${formatDuration(
-    MAX_SESSION_SECONDS,
+    maxSessionMinutes * 60,
   )}`;
 
   const handleMicClick = () => {

@@ -5,6 +5,7 @@ import type { Types } from "mongoose";
 
 import { connectDB } from "@/database/mongodb";
 import BookModel from "@/models/book.model";
+import BookQuotaLockModel from "@/models/book-quota-lock.model";
 import BookSegmentModel from "@/models/book-segment.model";
 import type { CreateBook, TextSegment } from "@/types";
 import { generateSlug } from "@/lib/utils/utils";
@@ -39,6 +40,15 @@ export type BookSegmentRecord = {
 export type BookSegmentSearchRecord = BookSegmentRecord & {
   score: number;
 };
+
+export type CreateBookWithinQuotaResult =
+  | {
+      status: "created" | "already-exists";
+      book: PersistedBookRecord;
+    }
+  | {
+      status: "limit-reached";
+    };
 
 type BookLike = {
   _id: Types.ObjectId | string;
@@ -106,13 +116,36 @@ export const toBookSegmentRecord = (
   wordCount: segment.wordCount,
 });
 
-export const findBooksByClerkId = async (clerkId: string) => {
+const escapeRegularExpression = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export const findBooksByClerkId = async (
+  clerkId: string,
+  searchQuery: string = "",
+) => {
   await connectDB();
 
-  return BookModel.find({ clerkId })
+  const normalizedQuery = searchQuery.trim().slice(0, 100);
+  const searchPattern = normalizedQuery
+    ? new RegExp(escapeRegularExpression(normalizedQuery), "i")
+    : null;
+  const filter = searchPattern
+    ? {
+        clerkId,
+        $or: [{ title: searchPattern }, { author: searchPattern }],
+      }
+    : { clerkId };
+
+  return BookModel.find(filter)
     .sort({ createdAt: -1 })
     .select("_id slug title author coverURL")
     .lean<BookSummaryLike[]>();
+};
+
+export const countBooksByClerkId = async (clerkId: string) => {
+  await connectDB();
+
+  return BookModel.countDocuments({ clerkId });
 };
 
 export const findBookByTitle = async (title: string, clerkId: string) => {
@@ -213,16 +246,78 @@ export const searchBookSegments = async (
   }));
 };
 
-export const createBookRecord = async (bookData: CreateBook) => {
-  await connectDB();
-
+export const createBookRecordWithinQuota = async (
+  bookData: CreateBook,
+  maxBooks: number,
+): Promise<CreateBookWithinQuotaResult> => {
+  const db = await connectDB();
   const slug = generateSlug(bookData.title);
-  const book = await BookModel.create({
-    ...bookData,
-    slug,
-    totalSegments: 0,
-  });
-  return toBookRecord(book);
+
+  // Ensure the shared write target exists before concurrent transactions use it.
+  try {
+    await BookQuotaLockModel.updateOne(
+      { _id: bookData.clerkId },
+      { $setOnInsert: { version: 0 } },
+      { upsert: true },
+    );
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) {
+      throw error;
+    }
+  }
+
+  return db.connection.transaction(
+    async (session) => {
+      // This write serializes quota checks for the same Clerk user.
+      await BookQuotaLockModel.updateOne(
+        { _id: bookData.clerkId },
+        { $inc: { version: 1 } },
+        { session },
+      );
+
+      const existingBook = await BookModel.findOne({
+        clerkId: bookData.clerkId,
+        slug,
+      })
+        .session(session)
+        .lean<BookLike>();
+
+      if (existingBook) {
+        return {
+          status: "already-exists",
+          book: toBookRecord(existingBook),
+        };
+      }
+
+      const bookCount = await BookModel.countDocuments({
+        clerkId: bookData.clerkId,
+      }).session(session);
+
+      if (bookCount >= maxBooks) {
+        return { status: "limit-reached" };
+      }
+
+      const [book] = await BookModel.create(
+        [
+          {
+            ...bookData,
+            slug,
+            totalSegments: 0,
+          },
+        ],
+        { session },
+      );
+
+      return {
+        status: "created",
+        book: toBookRecord(book),
+      };
+    },
+    {
+      readConcern: { level: "snapshot" },
+      writeConcern: { w: "majority" },
+    },
+  );
 };
 
 export const saveBookSegments = async (
@@ -263,4 +358,14 @@ export const rollbackBookPersistence = async (bookId: string | undefined) => {
   // Keep this rollback idempotent so cleanup can safely run after partial writes.
   await BookSegmentModel.deleteMany({ bookId });
   await BookModel.findByIdAndDelete(bookId);
+};
+
+const isDuplicateKeyError = (
+  error: unknown,
+): error is { code: 11000 | 11001 } => {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return false;
+  }
+
+  return error.code === 11000 || error.code === 11001;
 };
