@@ -4,7 +4,6 @@ import { Control, FieldPath, FieldValues } from "react-hook-form";
 import { LucideIcon } from "lucide-react";
 import z from "zod";
 import { UploadSchema } from "@/lib/zod";
-import type { SubscriptionLimitErrorCode } from "@/lib/subscription-constants";
 
 // ============================================
 // DATABASE MODELS
@@ -134,7 +133,6 @@ export interface StartSessionResult {
   sessionId?: string;
   maxDurationMinutes?: number;
   error?: string;
-  errorCode?: SubscriptionLimitErrorCode;
 }
 
 export interface EndSessionResult {

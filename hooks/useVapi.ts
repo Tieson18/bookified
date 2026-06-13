@@ -1,7 +1,6 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -14,13 +13,6 @@ import {
   ELEVENLABS_VOICE_MODEL,
   VOICE_SETTINGS,
 } from "@/lib/constant";
-import {
-  SUBSCRIPTIONS_PATH,
-  SUBSCRIPTION_LIMIT_ERROR_CODES,
-  SUBSCRIPTION_LIMIT_REASONS,
-  SUBSCRIPTION_LIMITS,
-} from "@/lib/subscription-constants";
-import { showSubscriptionLimitToast } from "@/lib/subscriptions/client";
 import {
   getVapi,
   installExpectedMeetingEndConsoleFilter,
@@ -73,6 +65,7 @@ const REQUIRED_CLIENT_MESSAGES = [
 ] as const;
 
 const BOOK_SEARCH_TOOL_NAME = "search_book_content";
+const DEFAULT_MAX_SESSION_MINUTES = 15;
 
 const BOOK_SEARCH_TOOL = {
   type: "function",
@@ -97,7 +90,6 @@ const BOOK_SEARCH_TOOL = {
 
 export const useVapi = (book: VoiceBook) => {
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
-  const router = useRouter();
   const { duration, startTimer, clearTimer } = useSessionTimer();
 
   const [status, setStatus] = useState<CallStatus>("idle");
@@ -105,8 +97,8 @@ export const useVapi = (book: VoiceBook) => {
   const [currentMessage, setCurrentMessage] = useState("");
   const [currentUserMessage, setCurrentUserMessage] = useState("");
   const [limitError, setLimitError] = useState<string | null>(null);
-  const [maxSessionMinutes, setMaxSessionMinutes] = useState<number>(
-    SUBSCRIPTION_LIMITS.free.maxSessionMinutes,
+  const [maxSessionMinutes, setMaxSessionMinutes] = useState(
+    DEFAULT_MAX_SESSION_MINUTES,
   );
 
   const currentMessageRef = useRef("");
@@ -118,9 +110,7 @@ export const useVapi = (book: VoiceBook) => {
   const sessionIdRef = useRef<string | null>(null);
   const startAttemptRef = useRef(0);
   const statusRef = useRef<CallStatus>("idle");
-  const maxSessionMinutesRef = useRef<number>(
-    SUBSCRIPTION_LIMITS.free.maxSessionMinutes,
-  );
+  const maxSessionMinutesRef = useRef(DEFAULT_MAX_SESSION_MINUTES);
   const handledToolCallsRef = useRef(new Set<string>());
 
   const isActive = useMemo(() => status !== "idle", [status]);
@@ -242,40 +232,42 @@ export const useVapi = (book: VoiceBook) => {
     [book.id, book.title, updateStatus],
   );
 
-  const finishCall = useCallback((updateUi = true) => {
-    clearTimer();
-    audioDiagnosticsCleanupRef.current?.();
-    audioDiagnosticsCleanupRef.current = null;
+  const finishCall = useCallback(
+    (updateUi = true) => {
+      clearTimer();
+      audioDiagnosticsCleanupRef.current?.();
+      audioDiagnosticsCleanupRef.current = null;
 
-    if (updateUi) {
-      flushStreamingMessages();
-      updateStatus("idle");
-    } else {
-      currentUserMessageRef.current = "";
-      currentMessageRef.current = "";
-      statusRef.current = "idle";
-    }
+      if (updateUi) {
+        flushStreamingMessages();
+        updateStatus("idle");
+      } else {
+        currentUserMessageRef.current = "";
+        currentMessageRef.current = "";
+        statusRef.current = "idle";
+      }
 
-    const sessionId = sessionIdRef.current;
+      const sessionId = sessionIdRef.current;
 
-    if (!sessionId) {
-      return;
-    }
+      if (!sessionId) {
+        return;
+      }
 
-    sessionIdRef.current = null;
+      sessionIdRef.current = null;
 
-    void endVoiceSession(sessionId).catch((error) => {
-      console.error("Error ending voice session:", error);
-    });
-  }, [clearTimer, flushStreamingMessages, updateStatus]);
+      void endVoiceSession(sessionId).catch((error) => {
+        console.error("Error ending voice session:", error);
+      });
+    },
+    [clearTimer, flushStreamingMessages, updateStatus],
+  );
 
   useEffect(() => {
     handlersRef.current = {
       onCallStart: () => {
         audioDiagnosticsCleanupRef.current?.();
-        audioDiagnosticsCleanupRef.current = attachVapiAudioDiagnostics(
-          getVapi(),
-        );
+        audioDiagnosticsCleanupRef.current =
+          attachVapiAudioDiagnostics(getVapi());
         updateStatus("listening");
         startTimer((elapsedSeconds) => {
           if (
@@ -300,10 +292,6 @@ export const useVapi = (book: VoiceBook) => {
             .finally(() => {
               finishCall();
               isStoppingRef.current = false;
-              showSubscriptionLimitToast(
-                SUBSCRIPTION_LIMIT_REASONS.duration,
-              );
-              router.push(SUBSCRIPTIONS_PATH);
             });
         });
       },
@@ -338,7 +326,6 @@ export const useVapi = (book: VoiceBook) => {
     finishCall,
     setStreamingMessage,
     startTimer,
-    router,
     updateStatus,
   ]);
 
@@ -477,19 +464,13 @@ export const useVapi = (book: VoiceBook) => {
 
       await requestMicrophoneAccess();
 
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
+      if (!isMountedRef.current || startAttemptRef.current !== startAttempt) {
         return;
       }
 
       const result = await startVoiceSession(book.id);
 
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
+      if (!isMountedRef.current || startAttemptRef.current !== startAttempt) {
         if (result.success && result.sessionId) {
           void endVoiceSession(result.sessionId);
         }
@@ -497,15 +478,6 @@ export const useVapi = (book: VoiceBook) => {
       }
 
       if (!result.success) {
-        if (
-          result.errorCode === SUBSCRIPTION_LIMIT_ERROR_CODES.sessionLimit
-        ) {
-          updateStatus("idle");
-          showSubscriptionLimitToast(SUBSCRIPTION_LIMIT_REASONS.sessions);
-          router.push(SUBSCRIPTIONS_PATH);
-          return;
-        }
-
         setLimitError(
           result.error || "Session limit reached. Please upgrade your plan.",
         );
@@ -515,8 +487,7 @@ export const useVapi = (book: VoiceBook) => {
 
       sessionIdRef.current = result.sessionId ?? null;
       const sessionLimit =
-        result.maxDurationMinutes ??
-        SUBSCRIPTION_LIMITS.free.maxSessionMinutes;
+        result.maxDurationMinutes ?? DEFAULT_MAX_SESSION_MINUTES;
       maxSessionMinutesRef.current = sessionLimit;
       setMaxSessionMinutes(sessionLimit);
       setMessages([]);
@@ -563,10 +534,7 @@ export const useVapi = (book: VoiceBook) => {
         logVapiCallConfiguration(call);
       }
 
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
+      if (!isMountedRef.current || startAttemptRef.current !== startAttempt) {
         await vapi.stop();
         finishCall(false);
         return;
@@ -579,10 +547,7 @@ export const useVapi = (book: VoiceBook) => {
         finishCall();
       }
     } catch (error) {
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
+      if (!isMountedRef.current || startAttemptRef.current !== startAttempt) {
         return;
       }
 
@@ -594,14 +559,7 @@ export const useVapi = (book: VoiceBook) => {
       );
       finishCall();
     }
-  }, [
-    book,
-    finishCall,
-    isAuthLoaded,
-    isSignedIn,
-    router,
-    updateStatus,
-  ]);
+  }, [book, finishCall, isAuthLoaded, isSignedIn, updateStatus]);
 
   const stopSession = useCallback(async () => {
     if (isStoppingRef.current) {

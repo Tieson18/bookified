@@ -1,25 +1,6 @@
 import UploadForm from "@/components/UploadForm";
-import { getAllBooks } from "@/lib/actions/book.actions";
-import {
-  getSubscriptionsPath,
-  SUBSCRIPTION_LIMIT_REASONS,
-} from "@/lib/subscription-constants";
-import { getServerSubscription } from "@/lib/subscriptions/server";
-import Link from "next/link";
-import { redirect } from "next/navigation";
 
-export default async function NewBookPage() {
-  const [subscription, booksResult] = await Promise.all([
-    getServerSubscription(),
-    getAllBooks(),
-  ]);
-  const bookCount = booksResult.success ? booksResult.data.length : 0;
-  const maxBooks = subscription?.limits.maxBooks ?? 1;
-
-  if (bookCount >= maxBooks) {
-    redirect(getSubscriptionsPath(SUBSCRIPTION_LIMIT_REASONS.books));
-  }
-
+export default function NewBookPage() {
   return (
     <main className="wrapper container">
       <section className="mx-auto w-full max-w-[579px]">
@@ -31,13 +12,7 @@ export default async function NewBookPage() {
             Upload a PDF to generate your interactive reading experience
           </p>
           <p className="mt-4 text-[13px] leading-5 text-[#3f3f3f]">
-            {bookCount} of {maxBooks} books used{" "}
-            <Link
-              href="/subscriptions"
-              className="font-semibold text-[var(--color-brand)] underline"
-            >
-              Upgrade
-            </Link>
+            5 of 10 books used (Upgrade)
           </p>
         </div>
 
