@@ -57,6 +57,7 @@ export type VapiCallStartFailedMessage = {
 };
 
 export type VapiMessage =
+  | VapiToolCallsMessage
   | VapiTranscriptMessage
   | VapiSpeechUpdateMessage
   | VapiStatusMessage
