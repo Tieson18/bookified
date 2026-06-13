@@ -109,40 +109,42 @@ export const useVapi = (book: VoiceBook) => {
     setCurrentMessage("");
   }, [appendMessage]);
 
-  const finishCall = useCallback((updateUi = true) => {
-    clearTimer();
-    audioDiagnosticsCleanupRef.current?.();
-    audioDiagnosticsCleanupRef.current = null;
+  const finishCall = useCallback(
+    (updateUi = true) => {
+      clearTimer();
+      audioDiagnosticsCleanupRef.current?.();
+      audioDiagnosticsCleanupRef.current = null;
 
-    if (updateUi) {
-      flushStreamingMessages();
-      updateStatus("idle");
-    } else {
-      currentUserMessageRef.current = "";
-      currentMessageRef.current = "";
-      statusRef.current = "idle";
-    }
+      if (updateUi) {
+        flushStreamingMessages();
+        updateStatus("idle");
+      } else {
+        currentUserMessageRef.current = "";
+        currentMessageRef.current = "";
+        statusRef.current = "idle";
+      }
 
-    const sessionId = sessionIdRef.current;
+      const sessionId = sessionIdRef.current;
 
-    if (!sessionId) {
-      return;
-    }
+      if (!sessionId) {
+        return;
+      }
 
-    sessionIdRef.current = null;
+      sessionIdRef.current = null;
 
-    void endVoiceSession(sessionId).catch((error) => {
-      console.error("Error ending voice session:", error);
-    });
-  }, [clearTimer, flushStreamingMessages, updateStatus]);
+      void endVoiceSession(sessionId).catch((error) => {
+        console.error("Error ending voice session:", error);
+      });
+    },
+    [clearTimer, flushStreamingMessages, updateStatus],
+  );
 
   useEffect(() => {
     handlersRef.current = {
       onCallStart: () => {
         audioDiagnosticsCleanupRef.current?.();
-        audioDiagnosticsCleanupRef.current = attachVapiAudioDiagnostics(
-          getVapi(),
-        );
+        audioDiagnosticsCleanupRef.current =
+          attachVapiAudioDiagnostics(getVapi());
         updateStatus("listening");
         startTimer();
       },
@@ -206,8 +208,25 @@ export const useVapi = (book: VoiceBook) => {
       handlersRef.current.onSpeechEnd();
     };
     const onMessage = (message: unknown) => {
-      console.debug("[Vapi] message received");
-      handlersRef.current.onMessage(message);
+      const transcript = getString(message, "transcript");
+
+      console.debug("[Vapi] message received", {
+        type: getString(message, "type") ?? "unknown",
+        role: getString(message, "role"),
+        status: getString(message, "status"),
+        transcriptType: getString(message, "transcriptType"),
+        transcriptLength: transcript?.length,
+      });
+      void handleBookSearchToolCalls(message)
+        .then((handled) => {
+          if (!handled) {
+            handlersRef.current.onMessage(message);
+          }
+        })
+        .catch((error) => {
+          console.error("[Vapi] Book search message dispatch failed", error);
+          handlersRef.current.onMessage(message);
+        });
     };
     const onError = (error: unknown) => {
       if (isMeetingEnded(error)) {
@@ -303,19 +322,13 @@ export const useVapi = (book: VoiceBook) => {
 
       await requestMicrophoneAccess();
 
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
+      if (!isMountedRef.current || startAttemptRef.current !== startAttempt) {
         return;
       }
 
       const result = await startVoiceSession(book.id);
 
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
+      if (!isMountedRef.current || startAttemptRef.current !== startAttempt) {
         if (result.success && result.sessionId) {
           void endVoiceSession(result.sessionId);
         }
@@ -351,10 +364,7 @@ export const useVapi = (book: VoiceBook) => {
         },
       });
 
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
+      if (!isMountedRef.current || startAttemptRef.current !== startAttempt) {
         await vapi.stop();
         finishCall(false);
         return;
@@ -367,10 +377,7 @@ export const useVapi = (book: VoiceBook) => {
         finishCall();
       }
     } catch (error) {
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
+      if (!isMountedRef.current || startAttemptRef.current !== startAttempt) {
         return;
       }
 
@@ -382,13 +389,7 @@ export const useVapi = (book: VoiceBook) => {
       );
       finishCall();
     }
-  }, [
-    book,
-    finishCall,
-    isAuthLoaded,
-    isSignedIn,
-    updateStatus,
-  ]);
+  }, [book, finishCall, isAuthLoaded, isSignedIn, updateStatus]);
 
   const stopSession = useCallback(async () => {
     if (isStoppingRef.current) {
