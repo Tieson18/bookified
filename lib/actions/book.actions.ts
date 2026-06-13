@@ -10,12 +10,13 @@ import {
 } from "@/lib/services/storage/blob-cleanup";
 import {
   countBooksByClerkId,
-  createBookRecord,
+  createBookRecordWithinQuota,
   findBookDetailWithSegmentPreview,
   findBookByTitle,
   findBooksByClerkId,
   rollbackBookPersistence,
   saveBookSegments,
+  searchBookSegments,
   toBookDetailRecord,
   toBookRecord,
   toBookSegmentRecord,
@@ -58,13 +59,17 @@ export type PersistUploadedBookResult = {
   cleanup?: BlobCleanupReport;
 };
 
+const NO_BOOK_INFORMATION_RESULT =
+  "No matching information was found in this book.";
+const MAX_BOOK_SEARCH_CONTEXT_LENGTH = 9_000;
+
 type UploadActionError = ActionError & {
   cleanup?: BlobCleanupReport;
 };
 
-export const getAllBooks = async (): Promise<
-  ActionResult<BookSummaryRecord[]>
-> => {
+export const getAllBooks = async (
+  searchQuery: string = "",
+): Promise<ActionResult<BookSummaryRecord[]>> => {
   const { userId } = await auth();
 
   if (!userId) {
@@ -72,7 +77,7 @@ export const getAllBooks = async (): Promise<
   }
 
   try {
-    const books = await findBooksByClerkId(userId);
+    const books = await findBooksByClerkId(userId, searchQuery);
 
     return ok(books.map(toBookSummaryRecord));
   } catch (error) {
@@ -120,6 +125,52 @@ export const getBookBySlug = async (
     );
   }
 };
+
+export async function searchBookContent(
+  bookId: string,
+  query: string,
+): Promise<ActionResult<string>> {
+  const { userId } = await auth();
+  const normalizedQuery = query.trim().slice(0, 500);
+
+  if (!userId) {
+    return fail("Please sign in to search this book.", "UNAUTHORIZED");
+  }
+
+  if (!bookId.trim() || !normalizedQuery) {
+    return fail(
+      "A book and search question are required.",
+      "BOOK_SEARCH_INVALID",
+    );
+  }
+
+  try {
+    const segments = await searchBookSegments(
+      bookId,
+      userId,
+      normalizedQuery,
+      3,
+    );
+    const excerpts = segments
+      .map((segment) => segment.content.trim())
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, MAX_BOOK_SEARCH_CONTEXT_LENGTH);
+
+    return ok(excerpts || NO_BOOK_INFORMATION_RESULT);
+  } catch (error) {
+    console.error("[books] Failed to search book content", {
+      bookId,
+      query: normalizedQuery,
+      error: toLoggableError(error),
+    });
+
+    return fail(
+      "Unable to search this book right now.",
+      "BOOK_CONTENT_SEARCH_FAILED",
+    );
+  }
+}
 
 export async function checkBookExists(
   title: string,
@@ -266,21 +317,25 @@ export async function persistUploadedBook({
   let createdBookId: string | undefined;
 
   try {
-    const existingBook = await findBookByTitle(book.title, userId);
+    const createResult = await createBookRecordWithinQuota(
+      {
+        ...book,
+        clerkId: userId,
+      },
+      subscription.limits.maxBooks,
+    );
 
-    if (existingBook) {
+    if (createResult.status === "already-exists") {
       const cleanup = await cleanupBlobAssets(uploadedPathnames);
 
       return ok({
         status: "already-exists",
-        book: toBookRecord(existingBook),
+        book: createResult.book,
         cleanup,
       });
     }
 
-    const bookCount = await countBooksByClerkId(userId);
-
-    if (bookCount >= subscription.limits.maxBooks) {
+    if (createResult.status === "limit-reached") {
       const cleanup = await cleanupBlobAssets(uploadedPathnames);
 
       return failWithCleanup(
@@ -293,10 +348,7 @@ export async function persistUploadedBook({
       );
     }
 
-    const createdBook = await createBookRecord({
-      ...book,
-      clerkId: userId,
-    });
+    const createdBook = createResult.book;
     createdBookId = createdBook.id;
 
     await saveBookSegments(createdBook.id, userId, segments);

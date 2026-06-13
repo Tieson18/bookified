@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { DEFAULT_VOICE, voiceOptions } from "@/lib/constant";
 import {
-  SUBSCRIPTIONS_PATH,
+  getSubscriptionsPath,
   SUBSCRIPTION_LIMIT_ERROR_CODES,
   SUBSCRIPTION_LIMIT_REASONS,
 } from "@/lib/subscription-constants";
@@ -209,7 +209,9 @@ const UploadForm = () => {
             result.error.code === SUBSCRIPTION_LIMIT_ERROR_CODES.bookLimit
           ) {
             showSubscriptionLimitToast(SUBSCRIPTION_LIMIT_REASONS.books);
-            router.push(SUBSCRIPTIONS_PATH);
+            router.push(
+              getSubscriptionsPath(SUBSCRIPTION_LIMIT_REASONS.books),
+            );
             return;
           }
 

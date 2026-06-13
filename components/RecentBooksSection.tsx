@@ -1,29 +1,23 @@
-import { Search } from "lucide-react";
+import { BookSearch } from "./BookSearch";
 import BookCard from "./BookCard";
 import { getAllBooks } from "@/lib/actions/book.actions";
 
-export async function RecentBooksSection() {
-  const bookResults = await getAllBooks();
+type RecentBooksSectionProps = {
+  query?: string;
+};
+
+export async function RecentBooksSection({
+  query = "",
+}: RecentBooksSectionProps) {
+  const bookResults = await getAllBooks(query);
   const books = bookResults.success ? (bookResults.data ?? []) : [];
+  const hasSearchQuery = query.trim().length > 0;
 
   return (
     <section className="mx-auto mt-13.5 w-full max-w-249.25 px-4 lg:px-0">
       <div className="library-filter-bar">
         <h2 className="section-title">Recent Books</h2>
-
-        <label className="library-search-wrapper h-8.5 sm:w-64.5">
-          <span className="sr-only">Search books</span>
-          <input
-            type="search"
-            placeholder="Search books..."
-            className="library-search-input h-full py-0 text-sm"
-          />
-          <Search
-            className="mr-3 size-5 shrink-0 text-[#111827]"
-            strokeWidth={2}
-            aria-hidden="true"
-          />
-        </label>
+        <BookSearch query={query} />
       </div>
 
       {books.length > 0 ? (
@@ -41,10 +35,12 @@ export async function RecentBooksSection() {
       ) : (
         <div className="library-empty-card text-center">
           <h3 className="font-serif text-2xl font-semibold text-[#212a3b]">
-            No books yet
+            {hasSearchQuery ? "No matching books" : "No books yet"}
           </h3>
           <p className="mt-2 text-sm leading-6 text-[#3d485e]">
-            Upload your first PDF to start building your library.
+            {hasSearchQuery
+              ? `No books match "${query.trim()}". Try another title or author.`
+              : "Upload your first PDF to start building your library."}
           </p>
         </div>
       )}

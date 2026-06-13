@@ -227,6 +227,7 @@
 
   .subscription-free-card {
     @apply flex min-h-[440px] flex-col rounded-2xl border border-[var(--border-subtle)] bg-white p-7;
+
     box-shadow: var(--shadow-soft-md);
   }
 
