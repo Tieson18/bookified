@@ -15,6 +15,7 @@ import {
   findBooksByClerkId,
   rollbackBookPersistence,
   saveBookSegments,
+  searchBookSegments,
   toBookDetailRecord,
   toBookRecord,
   toBookSegmentRecord,
@@ -58,6 +59,10 @@ export type PersistUploadedBookResult = {
 type UploadActionError = ActionError & {
   cleanup?: BlobCleanupReport;
 };
+
+const NO_BOOK_INFORMATION_RESULT =
+  "No matching information was found in this book.";
+const MAX_BOOK_SEARCH_CONTEXT_LENGTH = 9_000;
 
 export const getAllBooks = async (): Promise<
   ActionResult<BookSummaryRecord[]>
@@ -117,6 +122,52 @@ export const getBookBySlug = async (
     );
   }
 };
+
+export async function searchBookContent(
+  bookId: string,
+  query: string,
+): Promise<ActionResult<string>> {
+  const { userId } = await auth();
+  const normalizedQuery = query.trim().slice(0, 500);
+
+  if (!userId) {
+    return fail("Please sign in to search this book.", "UNAUTHORIZED");
+  }
+
+  if (!bookId.trim() || !normalizedQuery) {
+    return fail(
+      "A book and search question are required.",
+      "BOOK_SEARCH_INVALID",
+    );
+  }
+
+  try {
+    const segments = await searchBookSegments(
+      bookId,
+      userId,
+      normalizedQuery,
+      3,
+    );
+    const excerpts = segments
+      .map((segment) => segment.content.trim())
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, MAX_BOOK_SEARCH_CONTEXT_LENGTH);
+
+    return ok(excerpts || NO_BOOK_INFORMATION_RESULT);
+  } catch (error) {
+    console.error("[books] Failed to search book content", {
+      bookId,
+      query: normalizedQuery,
+      error: toLoggableError(error),
+    });
+
+    return fail(
+      "Unable to search this book right now.",
+      "BOOK_CONTENT_SEARCH_FAILED",
+    );
+  }
+}
 
 export async function checkBookExists(
   title: string,

@@ -12,10 +12,24 @@ export interface VoiceBook {
   id: string;
   title: string;
   author: string;
+  persona?: string;
 }
 
+export type VapiToolCall = {
+  id: string;
+  function: {
+    name: string;
+    arguments: string | Record<string, unknown>;
+  };
+};
+
+export type VapiToolCallsMessage = {
+  type: "tool-calls";
+  toolCallList: VapiToolCall[];
+};
+
 export type VapiTranscriptMessage = {
-  type: "transcript";
+  type: "transcript" | "transcript[transcriptType='final']";
   role: Role;
   transcript: string;
   transcriptType: "partial" | "final";

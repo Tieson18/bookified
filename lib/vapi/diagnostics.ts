@@ -3,6 +3,7 @@ import "client-only";
 import type Vapi from "@vapi-ai/web";
 
 type DailyCall = NonNullable<ReturnType<Vapi["getDailyCallObject"]>>;
+type VapiCall = NonNullable<Awaited<ReturnType<Vapi["start"]>>>;
 
 const MICROPHONE_CONSTRAINTS: MediaTrackConstraints = {
   autoGainControl: true,
@@ -44,6 +45,26 @@ const summarizeTrack = (track: MediaStreamTrack) => {
   };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getConfigString = (
+  value: Record<string, unknown> | undefined,
+  key: string,
+) => {
+  const entry = value?.[key];
+
+  return typeof entry === "string" ? entry : undefined;
+};
+
+const normalizeClientMessages = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
+
+  return typeof value === "string" ? [value] : [];
+};
+
 export const getMicrophoneErrorMessage = (error: unknown): string => {
   if (!window.isSecureContext) {
     return "Microphone access requires HTTPS or localhost.";
@@ -67,6 +88,37 @@ export const getMicrophoneErrorMessage = (error: unknown): string => {
   }
 
   return "The browser could not start the microphone. Check the site and operating-system microphone settings.";
+};
+
+export const logVapiCallConfiguration = (call: VapiCall): void => {
+  const assistant = isRecord(call.assistant) ? call.assistant : undefined;
+  const assistantOverrides = isRecord(call.assistantOverrides)
+    ? call.assistantOverrides
+    : undefined;
+  const transcriberConfig =
+    assistantOverrides?.transcriber ?? assistant?.transcriber;
+  const transcriber = isRecord(transcriberConfig)
+    ? transcriberConfig
+    : undefined;
+  const clientMessages = normalizeClientMessages(
+    assistantOverrides?.clientMessages ?? assistant?.clientMessages,
+  );
+
+  console.info("[Vapi diagnostics] effective call configuration", {
+    callId: call.id,
+    assistantId: call.assistantId,
+    transcriber: transcriber
+      ? {
+          provider: getConfigString(transcriber, "provider"),
+          model: getConfigString(transcriber, "model"),
+          language: getConfigString(transcriber, "language"),
+          endpointing: transcriber.endpointing,
+          smartFormat: transcriber.smartFormat,
+          keyterm: transcriber.keyterm,
+        }
+      : null,
+    clientMessages,
+  });
 };
 
 export const requestMicrophoneAccess = async (): Promise<void> => {
