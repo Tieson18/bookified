@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -9,11 +10,19 @@ import {
 } from "@/lib/actions/session.action";
 import { ASSISTANT_ID } from "@/lib/constant";
 import {
+  SUBSCRIPTIONS_PATH,
+  SUBSCRIPTION_LIMIT_ERROR_CODES,
+  SUBSCRIPTION_LIMIT_REASONS,
+  SUBSCRIPTION_LIMITS,
+} from "@/lib/subscription-constants";
+import { showSubscriptionLimitToast } from "@/lib/subscriptions/client";
+import {
   getVapi,
   installExpectedMeetingEndConsoleFilter,
 } from "@/lib/vapi/client";
 import {
   attachVapiAudioDiagnostics,
+  logVapiCallConfiguration,
   requestMicrophoneAccess,
 } from "@/lib/vapi/diagnostics";
 import {
@@ -27,7 +36,8 @@ import type {
   VapiEventHandlers,
   VoiceBook,
 } from "@/lib/vapi/types";
-import { getErrorText, isMeetingEnded } from "@/lib/vapi/utils";
+import { createBookTranscriber } from "@/lib/vapi/transcriber";
+import { getErrorText, getString, isMeetingEnded } from "@/lib/vapi/utils";
 import type { Messages } from "@/types";
 import { useSessionTimer } from "./useSessionTimer";
 
@@ -43,8 +53,15 @@ const noopHandlers = (): VapiEventHandlers => ({
   onCallStartFailed: () => {},
 });
 
+const REQUIRED_CLIENT_MESSAGES = [
+  "speech-update",
+  "status-update",
+  "transcript",
+] as const;
+
 export const useVapi = (book: VoiceBook) => {
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+  const router = useRouter();
   const { duration, startTimer, clearTimer } = useSessionTimer();
 
   const [status, setStatus] = useState<CallStatus>("idle");
@@ -52,6 +69,9 @@ export const useVapi = (book: VoiceBook) => {
   const [currentMessage, setCurrentMessage] = useState("");
   const [currentUserMessage, setCurrentUserMessage] = useState("");
   const [limitError, setLimitError] = useState<string | null>(null);
+  const [maxSessionMinutes, setMaxSessionMinutes] = useState<number>(
+    SUBSCRIPTION_LIMITS.free.maxSessionMinutes,
+  );
 
   const currentMessageRef = useRef("");
   const currentUserMessageRef = useRef("");
@@ -62,6 +82,9 @@ export const useVapi = (book: VoiceBook) => {
   const sessionIdRef = useRef<string | null>(null);
   const startAttemptRef = useRef(0);
   const statusRef = useRef<CallStatus>("idle");
+  const maxSessionMinutesRef = useRef<number>(
+    SUBSCRIPTION_LIMITS.free.maxSessionMinutes,
+  );
 
   const isActive = useMemo(() => status !== "idle", [status]);
 
@@ -144,7 +167,35 @@ export const useVapi = (book: VoiceBook) => {
           getVapi(),
         );
         updateStatus("listening");
-        startTimer();
+        startTimer((elapsedSeconds) => {
+          if (
+            elapsedSeconds < maxSessionMinutesRef.current * 60 ||
+            isStoppingRef.current
+          ) {
+            return;
+          }
+
+          setLimitError(
+            `This voice conversation reached your ${maxSessionMinutesRef.current}-minute plan limit.`,
+          );
+          isStoppingRef.current = true;
+
+          void getVapi()
+            .stop()
+            .catch((error) => {
+              if (!isMeetingEnded(error)) {
+                console.error("Error stopping session at plan limit:", error);
+              }
+            })
+            .finally(() => {
+              finishCall();
+              isStoppingRef.current = false;
+              showSubscriptionLimitToast(
+                SUBSCRIPTION_LIMIT_REASONS.duration,
+              );
+              router.push(SUBSCRIPTIONS_PATH);
+            });
+        });
       },
       onCallEnd: () => finishCall(),
       onSpeechStart: () => {
@@ -177,6 +228,7 @@ export const useVapi = (book: VoiceBook) => {
     finishCall,
     setStreamingMessage,
     startTimer,
+    router,
     updateStatus,
   ]);
 
@@ -206,7 +258,15 @@ export const useVapi = (book: VoiceBook) => {
       handlersRef.current.onSpeechEnd();
     };
     const onMessage = (message: unknown) => {
-      console.debug("[Vapi] message received");
+      const transcript = getString(message, "transcript");
+
+      console.debug("[Vapi] message received", {
+        type: getString(message, "type") ?? "unknown",
+        role: getString(message, "role"),
+        status: getString(message, "status"),
+        transcriptType: getString(message, "transcriptType"),
+        transcriptLength: transcript?.length,
+      });
       handlersRef.current.onMessage(message);
     };
     const onError = (error: unknown) => {
@@ -323,6 +383,15 @@ export const useVapi = (book: VoiceBook) => {
       }
 
       if (!result.success) {
+        if (
+          result.errorCode === SUBSCRIPTION_LIMIT_ERROR_CODES.sessionLimit
+        ) {
+          updateStatus("idle");
+          showSubscriptionLimitToast(SUBSCRIPTION_LIMIT_REASONS.sessions);
+          router.push(SUBSCRIPTIONS_PATH);
+          return;
+        }
+
         setLimitError(
           result.error || "Session limit reached. Please upgrade your plan.",
         );
@@ -331,6 +400,11 @@ export const useVapi = (book: VoiceBook) => {
       }
 
       sessionIdRef.current = result.sessionId ?? null;
+      const sessionLimit =
+        result.maxDurationMinutes ??
+        SUBSCRIPTION_LIMITS.free.maxSessionMinutes;
+      maxSessionMinutesRef.current = sessionLimit;
+      setMaxSessionMinutes(sessionLimit);
       setMessages([]);
       currentUserMessageRef.current = "";
       currentMessageRef.current = "";
@@ -339,17 +413,28 @@ export const useVapi = (book: VoiceBook) => {
       updateStatus("starting");
 
       const vapi = getVapi();
-      const call = await vapi.start(ASSISTANT_ID, {
+      const assistantOverrides = {
         firstMessage:
           `Hey, good to meet you. Quick question before we dive in: ` +
           `have you actually read ${book.title} yet, or are we starting fresh?`,
+        clientMessages: [...REQUIRED_CLIENT_MESSAGES],
+        transcriber: createBookTranscriber(book),
         variableValues: {
           title: book.title,
           author: book.author,
           bookId: book.id,
           voiceSessionId: result.sessionId,
         },
-      });
+      };
+      const call = await vapi.start(
+        ASSISTANT_ID,
+        // Vapi 2.5.2 documents an array but its generated type declares a scalar.
+        assistantOverrides as unknown as Parameters<typeof vapi.start>[1],
+      );
+
+      if (call) {
+        logVapiCallConfiguration(call);
+      }
 
       if (
         !isMountedRef.current ||
@@ -387,6 +472,7 @@ export const useVapi = (book: VoiceBook) => {
     finishCall,
     isAuthLoaded,
     isSignedIn,
+    router,
     updateStatus,
   ]);
 
@@ -421,6 +507,7 @@ export const useVapi = (book: VoiceBook) => {
     currentMessage,
     currentUserMessage,
     duration,
+    maxSessionMinutes,
     limitError,
     startSession,
     stopSession,

@@ -115,6 +115,12 @@ export const findBooksByClerkId = async (clerkId: string) => {
     .lean<BookSummaryLike[]>();
 };
 
+export const countBooksByClerkId = async (clerkId: string) => {
+  await connectDB();
+
+  return BookModel.countDocuments({ clerkId });
+};
+
 export const findBookByTitle = async (title: string, clerkId: string) => {
   await connectDB();
 

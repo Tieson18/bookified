@@ -59,7 +59,8 @@ export const isVapiTranscript = (
   }
 
   return (
-    msg.type === "transcript" &&
+    (msg.type === "transcript" ||
+      msg.type === "transcript[transcriptType='final']") &&
     isRole(msg.role) &&
     typeof msg.transcript === "string" &&
     (msg.transcriptType === "partial" || msg.transcriptType === "final")

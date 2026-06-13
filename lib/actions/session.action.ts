@@ -4,42 +4,59 @@ import { auth } from "@clerk/nextjs/server";
 
 import { connectDB } from "@/database/mongodb";
 import VoiceSessionModel from "@/models/voice-session.model";
+import { countVoiceSessionsForBillingPeriod } from "@/lib/services/sessions/session-persistence";
+import { getServerSubscription } from "@/lib/subscriptions/server";
 import type { EndSessionResult, StartSessionResult } from "@/types";
-import { getCurrentBillingPeriodStart } from "../subscription-constants";
+import {
+  getCurrentBillingPeriodStart,
+  SUBSCRIPTION_LIMIT_ERROR_CODES,
+} from "../subscription-constants";
 
 export const startVoiceSession = async (
   bookId: string,
 ): Promise<StartSessionResult> => {
   try {
-    const { userId } = await auth();
+    const subscription = await getServerSubscription();
 
-    if (!userId) {
+    if (!subscription) {
       return {
         success: false,
         error: "Please sign in to start a voice conversation.",
       };
     }
 
+    const { userId, limits, plan } = subscription;
+    const billingPeriodStart = getCurrentBillingPeriodStart();
+
     await connectDB();
-    //  limits/plan to see whether to allow starting session
-    // const limits = await getUserLimits(clerkId);
-    // if (limits.maxSessionMinutes <= 0) {
-    //     return {
-    //         success: false,
-    //         error: "Your current plan does not allow starting voice sessions. Please upgrade to access this feature."
-    //     };
-    // }
+
+    if (limits.maxSessionsPerMonth !== null) {
+      const sessionCount = await countVoiceSessionsForBillingPeriod(
+        userId,
+        billingPeriodStart,
+      );
+
+      if (sessionCount >= limits.maxSessionsPerMonth) {
+        return {
+          success: false,
+          error: `You have reached the ${limits.maxSessionsPerMonth}-session monthly limit for the ${plan} plan. Upgrade to start another voice conversation.`,
+          errorCode: SUBSCRIPTION_LIMIT_ERROR_CODES.sessionLimit,
+        };
+      }
+    }
+
     const session = await VoiceSessionModel.create({
       clerkId: userId,
       bookId,
       startedAt: new Date(),
-      billingPeriodStart: getCurrentBillingPeriodStart(),
+      billingPeriodStart,
       durationSeconds: 0,
     });
+
     return {
       success: true,
       sessionId: session._id.toString(),
-      // maxDurationMinutes: limits.maxSessionMinutes
+      maxDurationMinutes: limits.maxSessionMinutes,
     };
   } catch (e) {
     console.error("Error starting voice session", e);

@@ -19,6 +19,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { DEFAULT_VOICE, voiceOptions } from "@/lib/constant";
+import {
+  SUBSCRIPTIONS_PATH,
+  SUBSCRIPTION_LIMIT_ERROR_CODES,
+  SUBSCRIPTION_LIMIT_REASONS,
+} from "@/lib/subscription-constants";
+import { showSubscriptionLimitToast } from "@/lib/subscriptions/client";
 import { cn } from "@/lib/utils/utils";
 import { UploadSchema, type UploadFormValues } from "@/lib/zod";
 import { uploadBook as runBookUpload } from "@/lib/services/upload/book-upload.service";
@@ -199,6 +205,14 @@ const UploadForm = () => {
         });
 
         if (!result.success) {
+          if (
+            result.error.code === SUBSCRIPTION_LIMIT_ERROR_CODES.bookLimit
+          ) {
+            showSubscriptionLimitToast(SUBSCRIPTION_LIMIT_REASONS.books);
+            router.push(SUBSCRIPTIONS_PATH);
+            return;
+          }
+
           toast.error(`Error: ${result.error.message}`);
           return;
         }

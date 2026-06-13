@@ -15,7 +15,7 @@ export interface VoiceBook {
 }
 
 export type VapiTranscriptMessage = {
-  type: "transcript";
+  type: "transcript" | "transcript[transcriptType='final']";
   role: Role;
   transcript: string;
   transcriptType: "partial" | "final";
