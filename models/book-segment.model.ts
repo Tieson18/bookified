@@ -1,5 +1,6 @@
-import { IBookSegment } from "@/types";
-import { models, Schema, model } from "mongoose";
+import { model, models, Schema } from "mongoose";
+
+import type { IBookSegment } from "@/types";
 
 const BookSegmentSchema = new Schema<IBookSegment>(
   {

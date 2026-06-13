@@ -9,7 +9,7 @@ type UploadBlobAssetInput = {
   contentType: string;
 };
 
-export const uploadBlobAsset = async ({
+const uploadBlobAsset = async ({
   kind,
   pathname,
   body,

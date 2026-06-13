@@ -156,16 +156,6 @@ export const findBookByTitle = async (title: string, clerkId: string) => {
   return BookModel.findOne({ clerkId, slug }).lean<BookLike>();
 };
 
-export const findBookBySlug = async (slug: string, clerkId: string) => {
-  await connectDB();
-
-  return BookModel.findOne({ clerkId, slug })
-    .select(
-      "_id slug title author coverURL fileURL fileSize totalSegments persona createdAt",
-    )
-    .lean<BookDetailLike>();
-};
-
 export const findBookDetailWithSegmentPreview = cache(
   async (slug: string, clerkId: string, limit: number = 3) => {
     await connectDB();
@@ -197,19 +187,6 @@ export const findBookDetailWithSegmentPreview = cache(
     };
   },
 );
-
-export const findBookSegmentPreview = async (
-  bookId: string,
-  limit: number = 3,
-) => {
-  await connectDB();
-
-  return BookSegmentModel.find({ bookId })
-    .sort({ segmentIndex: 1 })
-    .limit(limit)
-    .select("_id content segmentIndex pageNumber wordCount")
-    .lean<BookSegmentLike[]>();
-};
 
 export const searchBookSegments = async (
   bookId: string,

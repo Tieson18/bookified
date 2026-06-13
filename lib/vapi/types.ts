@@ -46,12 +46,12 @@ export type VapiStatusMessage = {
   status: string;
 };
 
-export type VapiErrorMessage = {
+type VapiErrorMessage = {
   type: "error";
   error: unknown;
 };
 
-export type VapiCallStartFailedMessage = {
+type VapiCallStartFailedMessage = {
   type: "call-start-failed";
   error: unknown;
 };
@@ -73,7 +73,3 @@ export type VapiEventHandlers = {
   onError: (error: unknown) => void;
   onCallStartFailed: (error: unknown) => void;
 };
-
-export type SessionStartResult =
-  | { success: true; sessionId: string | null }
-  | { success: false; error: string };

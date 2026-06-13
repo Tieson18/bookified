@@ -13,7 +13,7 @@ export type ParsedBookPdf = {
   coverDataUrl: string;
 };
 
-export type UploadStage =
+type UploadStage =
   | "checking"
   | "parsing"
   | "uploading-pdf"
@@ -23,7 +23,7 @@ export type UploadStage =
 
 export type UploadProgressHandler = (stage: UploadStage, message: string) => void;
 
-export type UploadedBookRecord = {
+type UploadedBookRecord = {
   id: string;
   slug: string;
   title: string;

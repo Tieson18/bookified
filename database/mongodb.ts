@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import dns from "node:dns";
-import mongoose, { Mongoose } from "mongoose";
+import mongoose, { type Mongoose } from "mongoose";
 
 const FALLBACK_DNS_SERVERS = ["1.1.1.1", "8.8.8.8"];
 

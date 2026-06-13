@@ -1,17 +1,9 @@
-import { Document, Types } from "mongoose";
-import { ReactNode } from "react";
-import { Control, FieldPath, FieldValues } from "react-hook-form";
-import { LucideIcon } from "lucide-react";
-import z from "zod";
-import { UploadSchema } from "@/lib/zod";
+import type { Types } from "mongoose";
+
 import type { SubscriptionLimitErrorCode } from "@/lib/subscription-constants";
 
-// ============================================
-// DATABASE MODELS
-// ============================================
-
-export interface IBook extends Document {
-  _id: string;
+export interface IBook {
+  _id: Types.ObjectId;
   clerkId: string;
   title: string;
   slug: string;
@@ -27,7 +19,7 @@ export interface IBook extends Document {
   updatedAt: Date;
 }
 
-export interface IBookSegment extends Document {
+export interface IBookSegment {
   clerkId: string;
   bookId: Types.ObjectId;
   content: string;
@@ -38,7 +30,7 @@ export interface IBookSegment extends Document {
   updatedAt: Date;
 }
 
-export interface IVoiceSynthesisResult {
+interface IVoiceSynthesisResult {
   audioUrl: string;
   durationSeconds: number;
   status: "pending" | "success" | "failed";
@@ -46,8 +38,8 @@ export interface IVoiceSynthesisResult {
   createdAt: Date;
 }
 
-export interface IVoiceSession extends Document {
-  _id: string;
+export interface IVoiceSession {
+  _id: Types.ObjectId;
   clerkId: string;
   bookId: Types.ObjectId;
   voiceId?: string;
@@ -60,12 +52,6 @@ export interface IVoiceSession extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
-
-// ============================================
-// FORM & INPUT TYPES
-// ============================================
-
-export type BookUploadFormValues = z.infer<typeof UploadSchema>;
 
 export interface CreateBook {
   clerkId: string;
@@ -94,39 +80,8 @@ export interface BookCardProps {
 }
 
 export interface Messages {
-  role: string;
+  role: "user" | "assistant";
   content: string;
-}
-
-export interface ShadowBoxProps {
-  children: ReactNode;
-  className?: string;
-}
-
-export interface VoiceSelectorProps {
-  disabled?: boolean;
-  className?: string;
-  value?: string;
-  onChange: (voiceId: string) => void;
-}
-
-export interface InputFieldProps<T extends FieldValues> {
-  control: Control<T>;
-  name: FieldPath<T>;
-  label: string;
-  placeholder?: string;
-  disabled?: boolean;
-}
-
-export interface FileUploadFieldProps<T extends FieldValues> {
-  control: Control<T>;
-  name: FieldPath<T>;
-  label: string;
-  acceptTypes: string[];
-  disabled?: boolean;
-  icon: LucideIcon;
-  placeholder: string;
-  hint: string;
 }
 
 export interface StartSessionResult {

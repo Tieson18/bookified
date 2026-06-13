@@ -1,4 +1,4 @@
-export const SUBSCRIPTION_PLAN_SLUGS = {
+const SUBSCRIPTION_PLAN_SLUGS = {
   standard: "standard",
   pro: "pro",
 } as const;
