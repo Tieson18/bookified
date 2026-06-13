@@ -1,10 +1,8 @@
 "use client";
-
+import useVapi, { type VoiceBook } from "@/hooks/useVapi";
+import Transcript from "@/components/Transcript";
 import { Mic, MicOff } from "lucide-react";
 import Image from "next/image";
-
-import Transcript from "@/components/Transcript";
-import useVapi, { type VoiceBook } from "@/hooks/useVapi";
 
 type VapiControlsBook = VoiceBook & {
   coverURL: string;

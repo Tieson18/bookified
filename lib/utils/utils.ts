@@ -1,12 +1,15 @@
+import { TextSegment } from "@/types";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-
-import { DEFAULT_VOICE, voiceOptions } from "@/lib/constant";
-import type { TextSegment } from "@/types";
+import { DEFAULT_VOICE, voiceOptions } from "../constant";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+// Serialize Mongoose documents to plain JSON objects (strips ObjectId, Date, etc.)
+export const serializeData = <T>(data: T): T =>
+  JSON.parse(JSON.stringify(data));
 
 // Auto generate slug
 export function generateSlug(text: string): string {
@@ -18,6 +21,11 @@ export function generateSlug(text: string): string {
     .replace(/[\s_]+/g, "-") // Replace spaces and underscores with hyphens
     .replace(/^-+|-+$/g, ""); // Remove leading/trailing hyphens
 }
+
+// Escape regex special characters to prevent ReDoS attacks
+export const escapeRegex = (str: string): string => {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
 
 // Splits text content into segments for MongoDB storage and search
 export const splitIntoSegments = (
@@ -72,4 +80,11 @@ export const getVoice = (persona?: string) => {
 
   // Default fallback
   return defaultVoice;
+};
+
+// Format duration in seconds to MM:SS format
+export const formatDuration = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 };

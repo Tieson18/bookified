@@ -1,6 +1,5 @@
-import { model, models, Schema } from "mongoose";
-
-import type { IVoiceSession } from "@/types";
+import { IVoiceSession } from "@/types";
+import { models, Schema, model } from "mongoose";
 
 const VoiceSessionSchema = new Schema<IVoiceSession>(
   {

@@ -101,7 +101,7 @@ const getAvailableMicrophones = async () => {
   }
 };
 
-const getMicrophoneErrorMessage = (error: unknown): string => {
+export const getMicrophoneErrorMessage = (error: unknown): string => {
   if (!window.isSecureContext) {
     return "Microphone access requires HTTPS or localhost.";
   }

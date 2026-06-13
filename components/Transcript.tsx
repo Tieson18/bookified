@@ -1,7 +1,7 @@
 "use client";
 
-import { Mic } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { Mic } from "lucide-react";
 
 import type { Messages } from "@/types";
 
@@ -82,7 +82,7 @@ const Transcript = ({
 };
 
 type TranscriptBubbleProps = {
-  role: Messages["role"];
+  role: string;
   content: string;
   isStreaming?: boolean;
 };

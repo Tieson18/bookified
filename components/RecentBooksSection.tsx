@@ -1,7 +1,6 @@
-import { getAllBooks } from "@/lib/actions/book.actions";
-
 import { BookSearch } from "./BookSearch";
 import BookCard from "./BookCard";
+import { getAllBooks } from "@/lib/actions/book.actions";
 
 type RecentBooksSectionProps = {
   query?: string;

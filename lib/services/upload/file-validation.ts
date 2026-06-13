@@ -11,11 +11,11 @@ const IMAGE_EXTENSION_PATTERN = /\.(jpe?g|png|webp)$/i;
 
 export const getFirstFile = (files?: FileList) => files?.item(0) ?? undefined;
 
-const isPdfFile = (file: File) =>
+export const isPdfFile = (file: File) =>
   ACCEPTED_PDF_TYPES.includes(file.type) ||
   file.name.toLowerCase().endsWith(".pdf");
 
-const isAcceptedImageFile = (file: File) =>
+export const isAcceptedImageFile = (file: File) =>
   ACCEPTED_IMAGE_TYPES.includes(file.type) ||
   IMAGE_EXTENSION_PATTERN.test(file.name);
 
@@ -31,7 +31,7 @@ export const getSafeFileExtension = (file: File, fallback: string) => {
   return fallback;
 };
 
-function assertValidPdfFile(
+export function assertValidPdfFile(
   file: File | undefined,
 ): asserts file is File {
   if (!file) {
@@ -53,7 +53,7 @@ function assertValidPdfFile(
   }
 }
 
-const assertValidCoverImageFile = (file: File | undefined) => {
+export const assertValidCoverImageFile = (file: File | undefined) => {
   if (!file) {
     return;
   }

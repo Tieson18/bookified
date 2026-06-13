@@ -2,7 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   endVoiceSession,
@@ -53,7 +53,7 @@ import { getVoice } from "@/lib/utils/utils";
 import type { Messages } from "@/types";
 import { useSessionTimer } from "./useSessionTimer";
 
-export type { VoiceBook };
+export type { CallStatus, VoiceBook };
 
 const noopHandlers = (): VapiEventHandlers => ({
   onCallStart: () => {},
@@ -95,7 +95,7 @@ const BOOK_SEARCH_TOOL = {
   },
 } as const;
 
-const useVapi = (book: VoiceBook) => {
+export const useVapi = (book: VoiceBook) => {
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const router = useRouter();
   const { duration, startTimer, clearTimer } = useSessionTimer();
@@ -123,7 +123,7 @@ const useVapi = (book: VoiceBook) => {
   );
   const handledToolCallsRef = useRef(new Set<string>());
 
-  const isActive = status !== "idle";
+  const isActive = useMemo(() => status !== "idle", [status]);
 
   const updateStatus = useCallback((next: CallStatus) => {
     statusRef.current = next;

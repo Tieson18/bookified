@@ -1,11 +1,11 @@
+import { BookCardProps } from "@/types";
 import Image from "next/image";
 import Link from "next/link";
-
-import type { BookCardProps } from "@/types";
+import React from "react";
 
 const BookCard = ({ title, author, coverURL, slug }: BookCardProps) => {
   return (
-    <Link href={`/books/${slug}`} className="book-card-link">
+    <Link href={`/books/${slug}`} key={slug} className="book-card-link">
       <article className="book-card group">
         <figure className="book-card-figure">
           <div className="book-card-cover-wrapper">

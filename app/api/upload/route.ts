@@ -1,6 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
-import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 
 import {
   ACCEPTED_IMAGE_TYPES,
@@ -8,8 +7,9 @@ import {
   MAX_FILE_SIZE,
   MAX_IMAGE_SIZE,
 } from "@/lib/constant";
-import type { UploadAssetKind } from "@/lib/services/upload/types";
+import { UploadAssetKind } from "@/lib/services/upload/types";
 import { generateSlug } from "@/lib/utils/utils";
+import { NextResponse } from "next/server";
 
 class UploadRouteError extends Error {
   constructor(
