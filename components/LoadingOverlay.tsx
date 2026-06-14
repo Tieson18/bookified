@@ -1,9 +1,9 @@
-import { Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react";
 
 type LoadingOverlayProps = {
-  title?: string
-  message?: string
-}
+  title?: string;
+  message?: string;
+};
 
 const LoadingOverlay = ({
   title = "Beginning synthesis",
@@ -24,7 +24,7 @@ const LoadingOverlay = ({
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default LoadingOverlay
+export default LoadingOverlay;

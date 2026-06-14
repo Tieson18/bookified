@@ -9,8 +9,6 @@ import {
 
 export const VOICE_IDS = ["dave", "daniel", "chris", "rachel", "sarah"] as const;
 
-export type VoiceId = (typeof VOICE_IDS)[number];
-
 const PDF_SIZE_LABEL = "50MB";
 const IMAGE_SIZE_LABEL = "10MB";
 

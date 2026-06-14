@@ -5,28 +5,6 @@ import type Vapi from "@vapi-ai/web";
 type DailyCall = NonNullable<ReturnType<Vapi["getDailyCallObject"]>>;
 type VapiCall = NonNullable<Awaited<ReturnType<Vapi["start"]>>>;
 
-const MICROPHONE_CONSTRAINTS: MediaTrackConstraints = {
-  autoGainControl: true,
-  echoCancellation: true,
-  noiseSuppression: true,
-};
-
-const getPermissionState = async (): Promise<PermissionState | "unsupported"> => {
-  if (!navigator.permissions?.query) {
-    return "unsupported";
-  }
-
-  try {
-    return (
-      await navigator.permissions.query({
-        name: "microphone" as PermissionName,
-      })
-    ).state;
-  } catch {
-    return "unsupported";
-  }
-};
-
 const summarizeTrack = (track: MediaStreamTrack) => {
   const settings = track.getSettings();
   const extendedSettings = settings as MediaTrackSettings & {
@@ -101,31 +79,6 @@ const getAvailableMicrophones = async () => {
   }
 };
 
-export const getMicrophoneErrorMessage = (error: unknown): string => {
-  if (!window.isSecureContext) {
-    return "Microphone access requires HTTPS or localhost.";
-  }
-
-  if (error instanceof DOMException) {
-    if (error.name === "NotAllowedError" || error.name === "SecurityError") {
-      return "Microphone access was blocked. Allow microphone access for this site and try again.";
-    }
-
-    if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-      return "No microphone was found. Connect or enable a microphone and try again.";
-    }
-
-    if (
-      error.name === "NotReadableError" ||
-      error.name === "TrackStartError"
-    ) {
-      return "The microphone is unavailable or already in use by another application.";
-    }
-  }
-
-  return "The browser could not start the microphone. Check the site and operating-system microphone settings.";
-};
-
 export const logVapiCallConfiguration = (call: VapiCall): void => {
   const assistant = isRecord(call.assistant) ? call.assistant : undefined;
   const assistantOverrides = isRecord(call.assistantOverrides)
@@ -165,65 +118,6 @@ export const logVapiCallConfiguration = (call: VapiCall): void => {
       "[Vapi diagnostics] effective assistant configuration is missing required client messages",
       { missingClientMessages },
     );
-  }
-};
-
-export const requestMicrophoneAccess = async (): Promise<void> => {
-  const permissionBefore = await getPermissionState();
-
-  console.info("[Vapi diagnostics] microphone request", {
-    isSecureContext: window.isSecureContext,
-    mediaDevicesAvailable: Boolean(navigator.mediaDevices?.getUserMedia),
-    permissionBefore,
-  });
-
-  if (!window.isSecureContext) {
-    throw new Error("Microphone access requires HTTPS or localhost.");
-  }
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("This browser does not support microphone capture.");
-  }
-
-  let stream: MediaStream | null = null;
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: MICROPHONE_CONSTRAINTS,
-      video: false,
-    });
-
-    const tracks = stream.getAudioTracks();
-    const liveTrack = tracks.find((track) => track.readyState === "live");
-
-    console.log("Audio tracks:", tracks);
-    tracks.forEach((track) => {
-      console.log("[Vapi diagnostics] audio track", {
-        enabled: track.enabled,
-        muted: track.muted,
-        readyState: track.readyState,
-        label: track.label,
-      });
-    });
-
-    if (!liveTrack) {
-      throw new Error("The browser granted access but did not provide a live microphone track.");
-    }
-
-    console.info("[Vapi diagnostics] microphone granted", {
-      permissionAfter: await getPermissionState(),
-      tracks: tracks.map(summarizeTrack),
-      availableMicrophones: await getAvailableMicrophones(),
-    });
-  } catch (error) {
-    console.error("[Vapi diagnostics] microphone request failed", {
-      error,
-      permissionAfter: await getPermissionState(),
-    });
-
-    throw new Error(getMicrophoneErrorMessage(error), { cause: error });
-  } finally {
-    stream?.getTracks().forEach((track) => track.stop());
   }
 };
 

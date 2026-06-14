@@ -11,7 +11,7 @@ type MessageHandlerDeps = {
   appendMessage: (role: Role, content: string) => void;
   setStreaming: (role: Role, content: string) => void;
   updateStatus: (status: CallStatus) => void;
-  finishCall: () => void;
+  handleCallEnded: (endedReason?: string) => void;
 };
 
 export const createMessageHandler =
@@ -45,7 +45,7 @@ export const createMessageHandler =
     }
 
     if (isVapiStatus(message) && message.status === "ended") {
-      deps.finishCall();
+      deps.handleCallEnded(message.endedReason);
     }
   };
 
@@ -61,8 +61,6 @@ export const createErrorHandler =
       deps.finishCall();
       return;
     }
-
-    console.error("VAPI error:", error);
 
     const errorType = getString(error, "type") ?? "";
     const isLifecycleCallError =

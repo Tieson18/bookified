@@ -1,19 +1,15 @@
-"use client";
+import "client-only";
 
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { searchBookContent } from "@/lib/actions/book.actions";
 import {
   endVoiceSession,
   startVoiceSession,
 } from "@/lib/actions/session.action";
-import { searchBookContent } from "@/lib/actions/book.actions";
-import {
-  ASSISTANT_ID,
-  ELEVENLABS_VOICE_MODEL,
-  VOICE_SETTINGS,
-} from "@/lib/constant";
+import { ASSISTANT_ID } from "@/lib/constant";
 import {
   SUBSCRIPTIONS_PATH,
   SUBSCRIPTION_LIMIT_ERROR_CODES,
@@ -22,13 +18,16 @@ import {
 } from "@/lib/subscription-constants";
 import { showSubscriptionLimitToast } from "@/lib/subscriptions/client";
 import {
+  BOOK_SEARCH_TOOL_NAME,
+  startBookConversation,
+} from "@/lib/vapi/assistant";
+import {
   getVapi,
   installExpectedMeetingEndConsoleFilter,
 } from "@/lib/vapi/client";
 import {
   attachVapiAudioDiagnostics,
   logVapiCallConfiguration,
-  requestMicrophoneAccess,
 } from "@/lib/vapi/diagnostics";
 import {
   createErrorHandler,
@@ -38,24 +37,26 @@ import {
 import type {
   CallStatus,
   Role,
+  VapiCallStartProgressEvent,
+  VapiCallStartSuccessEvent,
   VapiEventHandlers,
   VoiceBook,
 } from "@/lib/vapi/types";
-import { createBookTranscriber } from "@/lib/vapi/transcriber";
 import {
   getErrorText,
   getString,
+  getVapiEndedReasonMessage,
   isMeetingEnded,
   isVapiToolCalls,
   parseVapiToolArguments,
 } from "@/lib/vapi/utils";
-import { getVoice } from "@/lib/utils/utils";
-import type { Messages } from "@/types";
+import type { TranscriptMessage } from "@/types";
+
 import { useSessionTimer } from "./useSessionTimer";
 
 export type { CallStatus, VoiceBook };
 
-const noopHandlers = (): VapiEventHandlers => ({
+const NOOP_HANDLERS: VapiEventHandlers = {
   onCallStart: () => {},
   onCallEnd: () => {},
   onSpeechStart: () => {},
@@ -63,69 +64,46 @@ const noopHandlers = (): VapiEventHandlers => ({
   onMessage: () => {},
   onError: () => {},
   onCallStartFailed: () => {},
-});
+};
 
-const REQUIRED_CLIENT_MESSAGES = [
-  "speech-update",
-  "status-update",
-  "transcript",
-  "tool-calls",
-] as const;
-
-const BOOK_SEARCH_TOOL_NAME = "search_book_content";
-
-const BOOK_SEARCH_TOOL = {
-  type: "function",
-  async: true,
-  function: {
-    name: BOOK_SEARCH_TOOL_NAME,
-    description:
-      "Search the uploaded book before answering questions about its plot, characters, claims, examples, chapters, or other content. Use the user's question as the query. After calling this tool, wait for the application to provide relevant excerpts before answering.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description:
-            "A concise semantic search query based on the user's question about the book.",
-        },
-      },
-      required: ["query"],
-    },
-  },
-} as const;
-
-export const useVapi = (book: VoiceBook) => {
+export const useVapi = (
+  book: VoiceBook,
+  initialMaxSessionMinutes: number =
+    SUBSCRIPTION_LIMITS.free.maxSessionMinutes,
+) => {
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const router = useRouter();
   const { duration, startTimer, clearTimer } = useSessionTimer();
 
   const [status, setStatus] = useState<CallStatus>("idle");
-  const [messages, setMessages] = useState<Messages[]>([]);
+  const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [currentMessage, setCurrentMessage] = useState("");
   const [currentUserMessage, setCurrentUserMessage] = useState("");
   const [limitError, setLimitError] = useState<string | null>(null);
   const [maxSessionMinutes, setMaxSessionMinutes] = useState<number>(
-    SUBSCRIPTION_LIMITS.free.maxSessionMinutes,
+    initialMaxSessionMinutes,
   );
 
   const currentMessageRef = useRef("");
   const currentUserMessageRef = useRef("");
-  const handlersRef = useRef<VapiEventHandlers>(noopHandlers());
+  const handlersRef = useRef<VapiEventHandlers>(NOOP_HANDLERS);
   const audioDiagnosticsCleanupRef = useRef<(() => void) | null>(null);
   const isStoppingRef = useRef(false);
   const isMountedRef = useRef(false);
+  const expectedEndRef = useRef(false);
   const sessionIdRef = useRef<string | null>(null);
   const startAttemptRef = useRef(0);
   const statusRef = useRef<CallStatus>("idle");
-  const maxSessionMinutesRef = useRef<number>(
-    SUBSCRIPTION_LIMITS.free.maxSessionMinutes,
-  );
+  const maxSessionMinutesRef = useRef<number>(initialMaxSessionMinutes);
   const handledToolCallsRef = useRef(new Set<string>());
 
-  const isActive = useMemo(() => status !== "idle", [status]);
+  const isActive = status !== "idle";
 
   const updateStatus = useCallback((next: CallStatus) => {
+    if (statusRef.current === next) {
+      return;
+    }
+
     statusRef.current = next;
     setStatus(next);
   }, []);
@@ -150,8 +128,16 @@ export const useVapi = (book: VoiceBook) => {
 
   const setStreamingMessage = useCallback((role: Role, content: string) => {
     if (role === "user") {
+      if (currentUserMessageRef.current === content) {
+        return;
+      }
+
       currentUserMessageRef.current = content;
       setCurrentUserMessage(content);
+      return;
+    }
+
+    if (currentMessageRef.current === content) {
       return;
     }
 
@@ -269,6 +255,22 @@ export const useVapi = (book: VoiceBook) => {
     });
   }, [clearTimer, flushStreamingMessages, updateStatus]);
 
+  const handleCallEnded = useCallback(
+    (endedReason?: string) => {
+      const errorMessage = getVapiEndedReasonMessage(
+        endedReason,
+        expectedEndRef.current,
+      );
+
+      if (errorMessage) {
+        setLimitError(errorMessage);
+      }
+
+      finishCall();
+    },
+    [finishCall],
+  );
+
   useEffect(() => {
     handlersRef.current = {
       onCallStart: () => {
@@ -289,6 +291,7 @@ export const useVapi = (book: VoiceBook) => {
             `This voice conversation reached your ${maxSessionMinutesRef.current}-minute plan limit.`,
           );
           isStoppingRef.current = true;
+          expectedEndRef.current = true;
 
           void getVapi()
             .stop()
@@ -322,7 +325,7 @@ export const useVapi = (book: VoiceBook) => {
         appendMessage,
         setStreaming: setStreamingMessage,
         updateStatus,
-        finishCall,
+        handleCallEnded,
       }),
       onError: createErrorHandler({
         finishCall,
@@ -336,6 +339,7 @@ export const useVapi = (book: VoiceBook) => {
   }, [
     appendMessage,
     finishCall,
+    handleCallEnded,
     setStreamingMessage,
     startTimer,
     router,
@@ -374,6 +378,7 @@ export const useVapi = (book: VoiceBook) => {
         type: getString(message, "type") ?? "unknown",
         role: getString(message, "role"),
         status: getString(message, "status"),
+        endedReason: getString(message, "endedReason"),
         transcriptType: getString(message, "transcriptType"),
         transcriptLength: transcript?.length,
       });
@@ -399,6 +404,12 @@ export const useVapi = (book: VoiceBook) => {
       console.error("[Vapi] call-start-failed", error);
       handlersRef.current.onCallStartFailed(error);
     };
+    const onCallStartProgress = (event: VapiCallStartProgressEvent) => {
+      console.debug("[Vapi] call-start-progress", event);
+    };
+    const onCallStartSuccess = (event: VapiCallStartSuccessEvent) => {
+      console.info("[Vapi] call-start-success", event);
+    };
 
     vapi.on("call-start", onCallStart);
     vapi.on("call-end", onCallEnd);
@@ -406,6 +417,8 @@ export const useVapi = (book: VoiceBook) => {
     vapi.on("speech-end", onSpeechEnd);
     vapi.on("message", onMessage);
     vapi.on("error", onError);
+    vapi.on("call-start-progress", onCallStartProgress);
+    vapi.on("call-start-success", onCallStartSuccess);
     vapi.on("call-start-failed", onCallStartFailed);
 
     return () => {
@@ -418,6 +431,8 @@ export const useVapi = (book: VoiceBook) => {
       vapi.removeListener("speech-end", onSpeechEnd);
       vapi.removeListener("message", onMessage);
       vapi.removeListener("error", onError);
+      vapi.removeListener("call-start-progress", onCallStartProgress);
+      vapi.removeListener("call-start-success", onCallStartSuccess);
       vapi.removeListener("call-start-failed", onCallStartFailed);
 
       const shouldStopCall =
@@ -459,6 +474,7 @@ export const useVapi = (book: VoiceBook) => {
 
     try {
       setLimitError(null);
+      expectedEndRef.current = false;
       updateStatus("connecting");
 
       if (!book.id) {
@@ -475,22 +491,13 @@ export const useVapi = (book: VoiceBook) => {
         return;
       }
 
-      await requestMicrophoneAccess();
-
-      if (
-        !isMountedRef.current ||
-        startAttemptRef.current !== startAttempt
-      ) {
-        return;
-      }
-
       const result = await startVoiceSession(book.id);
 
       if (
         !isMountedRef.current ||
         startAttemptRef.current !== startAttempt
       ) {
-        if (result.success && result.sessionId) {
+        if (result.success) {
           void endVoiceSession(result.sessionId);
         }
         return;
@@ -513,10 +520,8 @@ export const useVapi = (book: VoiceBook) => {
         return;
       }
 
-      sessionIdRef.current = result.sessionId ?? null;
-      const sessionLimit =
-        result.maxDurationMinutes ??
-        SUBSCRIPTION_LIMITS.free.maxSessionMinutes;
+      sessionIdRef.current = result.sessionId;
+      const sessionLimit = result.maxDurationMinutes;
       maxSessionMinutesRef.current = sessionLimit;
       setMaxSessionMinutes(sessionLimit);
       setMessages([]);
@@ -528,35 +533,12 @@ export const useVapi = (book: VoiceBook) => {
       updateStatus("starting");
 
       const vapi = getVapi();
-      const selectedVoice = getVoice(book.persona);
-      const assistantOverrides = {
-        firstMessage:
-          `Hey, good to meet you. Quick question before we dive in: ` +
-          `have you actually read ${book.title} yet, or are we starting fresh?`,
-        clientMessages: [...REQUIRED_CLIENT_MESSAGES],
-        transcriber: createBookTranscriber(book),
-        ...(selectedVoice
-          ? {
-              voice: {
-                provider: "11labs",
-                voiceId: selectedVoice.elevenLabsId,
-                model: ELEVENLABS_VOICE_MODEL,
-                ...VOICE_SETTINGS,
-              },
-            }
-          : {}),
-        "tools:append": [BOOK_SEARCH_TOOL],
-        variableValues: {
-          title: book.title,
-          author: book.author,
-          bookId: book.id,
-          voiceSessionId: result.sessionId,
-        },
-      };
-      const call = await vapi.start(
+      const call = await startBookConversation(
+        vapi,
         ASSISTANT_ID,
-        // Vapi 2.5.2 documents an array but its generated type declares a scalar.
-        assistantOverrides as unknown as Parameters<typeof vapi.start>[1],
+        book,
+        result.sessionId,
+        result.maxDurationMinutes,
       );
 
       if (call) {
@@ -610,6 +592,7 @@ export const useVapi = (book: VoiceBook) => {
 
     try {
       isStoppingRef.current = true;
+      expectedEndRef.current = true;
       startAttemptRef.current += 1;
       await getVapi().stop();
     } catch (error) {

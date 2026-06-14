@@ -1,14 +1,14 @@
 import "server-only";
 
-import { cache } from "react";
 import type { Types } from "mongoose";
+import { cache } from "react";
 
 import { connectDB } from "@/database/mongodb";
 import BookModel from "@/models/book.model";
 import BookQuotaLockModel from "@/models/book-quota-lock.model";
 import BookSegmentModel from "@/models/book-segment.model";
 import type { CreateBook, TextSegment } from "@/types";
-import { generateSlug } from "@/lib/utils/utils";
+import { escapeRegex, generateSlug } from "@/lib/utils/utils";
 
 export type PersistedBookRecord = {
   id: string;
@@ -116,9 +116,6 @@ export const toBookSegmentRecord = (
   wordCount: segment.wordCount,
 });
 
-const escapeRegularExpression = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 export const findBooksByClerkId = async (
   clerkId: string,
   searchQuery: string = "",
@@ -127,7 +124,7 @@ export const findBooksByClerkId = async (
 
   const normalizedQuery = searchQuery.trim().slice(0, 100);
   const searchPattern = normalizedQuery
-    ? new RegExp(escapeRegularExpression(normalizedQuery), "i")
+    ? new RegExp(escapeRegex(normalizedQuery), "i")
     : null;
   const filter = searchPattern
     ? {
@@ -154,16 +151,6 @@ export const findBookByTitle = async (title: string, clerkId: string) => {
   const slug = generateSlug(title);
 
   return BookModel.findOne({ clerkId, slug }).lean<BookLike>();
-};
-
-export const findBookBySlug = async (slug: string, clerkId: string) => {
-  await connectDB();
-
-  return BookModel.findOne({ clerkId, slug })
-    .select(
-      "_id slug title author coverURL fileURL fileSize totalSegments persona createdAt",
-    )
-    .lean<BookDetailLike>();
 };
 
 export const findBookDetailWithSegmentPreview = cache(
@@ -197,19 +184,6 @@ export const findBookDetailWithSegmentPreview = cache(
     };
   },
 );
-
-export const findBookSegmentPreview = async (
-  bookId: string,
-  limit: number = 3,
-) => {
-  await connectDB();
-
-  return BookSegmentModel.find({ bookId })
-    .sort({ segmentIndex: 1 })
-    .limit(limit)
-    .select("_id content segmentIndex pageNumber wordCount")
-    .lean<BookSegmentLike[]>();
-};
 
 export const searchBookSegments = async (
   bookId: string,

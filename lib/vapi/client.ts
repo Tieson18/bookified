@@ -2,7 +2,7 @@ import "client-only";
 
 import Vapi from "@vapi-ai/web";
 
-import { isMeetingEnded } from "./utils";
+import { getErrorText, isMeetingEnded } from "./utils";
 
 const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY;
 
@@ -41,7 +41,12 @@ export const installExpectedMeetingEndConsoleFilter = (): (() => void) => {
     originalConsoleError = console.error;
 
     filteredConsoleError = (...args: Parameters<typeof console.error>) => {
-      if (args.some(isMeetingEnded)) {
+      const combinedErrorText = args
+        .map((arg) => getErrorText(arg))
+        .filter(Boolean)
+        .join(" ");
+
+      if (args.some(isMeetingEnded) || isMeetingEnded(combinedErrorText)) {
         return;
       }
 

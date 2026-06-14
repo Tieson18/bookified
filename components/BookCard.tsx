@@ -1,7 +1,12 @@
-import { BookCardProps } from "@/types";
 import Image from "next/image";
 import Link from "next/link";
-import React from "react";
+
+type BookCardProps = {
+  title: string;
+  author: string;
+  coverURL: string;
+  slug: string;
+};
 
 const BookCard = ({ title, author, coverURL, slug }: BookCardProps) => {
   return (

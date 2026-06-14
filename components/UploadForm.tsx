@@ -1,11 +1,11 @@
 "use client";
 
-import * as React from "react";
+import { useAuth } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ImageIcon, Upload, X, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import * as React from "react";
 import { useForm } from "react-hook-form";
-import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 
 import LoadingOverlay from "@/components/LoadingOverlay";
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { DEFAULT_VOICE, voiceOptions } from "@/lib/constant";
+import { uploadBook as runBookUpload } from "@/lib/services/upload/book-upload.service";
 import {
   getSubscriptionsPath,
   SUBSCRIPTION_LIMIT_ERROR_CODES,
@@ -27,7 +28,6 @@ import {
 import { showSubscriptionLimitToast } from "@/lib/subscriptions/client";
 import { cn } from "@/lib/utils/utils";
 import { UploadSchema, type UploadFormValues } from "@/lib/zod";
-import { uploadBook as runBookUpload } from "@/lib/services/upload/book-upload.service";
 
 type FileDropzoneProps = Omit<
   React.ComponentPropsWithoutRef<"input">,

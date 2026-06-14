@@ -3,14 +3,31 @@
 import { auth } from "@clerk/nextjs/server";
 
 import { connectDB } from "@/database/mongodb";
-import VoiceSessionModel from "@/models/voice-session.model";
+import { toLoggableError } from "@/lib/result";
 import { countVoiceSessionsForBillingPeriod } from "@/lib/services/sessions/session-persistence";
-import { getServerSubscription } from "@/lib/subscriptions/server";
-import type { EndSessionResult, StartSessionResult } from "@/types";
 import {
   getCurrentBillingPeriodStart,
   SUBSCRIPTION_LIMIT_ERROR_CODES,
-} from "../subscription-constants";
+  type SubscriptionLimitErrorCode,
+} from "@/lib/subscription-constants";
+import { getServerSubscription } from "@/lib/subscriptions/server";
+import VoiceSessionModel from "@/models/voice-session.model";
+
+type StartSessionResult =
+  | {
+      success: true;
+      sessionId: string;
+      maxDurationMinutes: number;
+    }
+  | {
+      success: false;
+      error: string;
+      errorCode?: SubscriptionLimitErrorCode;
+    };
+
+type EndSessionResult = {
+  success: boolean;
+};
 
 export const startVoiceSession = async (
   bookId: string,
@@ -58,8 +75,11 @@ export const startVoiceSession = async (
       sessionId: session._id.toString(),
       maxDurationMinutes: limits.maxSessionMinutes,
     };
-  } catch (e) {
-    console.error("Error starting voice session", e);
+  } catch (error) {
+    console.error(
+      "[voice-session] Failed to start voice session",
+      toLoggableError(error),
+    );
     return {
       success: false,
       error: "An error occurred while starting the voice session.",
@@ -113,8 +133,11 @@ export const endVoiceSession = async (
     ).lean();
 
     return { success: Boolean(updatedSession) };
-  } catch (e) {
-    console.error("Error ending voice session", e);
+  } catch (error) {
+    console.error(
+      "[voice-session] Failed to end voice session",
+      toLoggableError(error),
+    );
     return { success: false };
   }
 };

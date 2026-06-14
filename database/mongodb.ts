@@ -60,16 +60,16 @@ const configureDnsForMongoSrv = (uri: string, useFallback = false) => {
 };
 
 const isSrvDnsError = (error: unknown) => {
-  const maybeDnsError = error as {
-    code?: unknown;
-    syscall?: unknown;
-    message?: unknown;
-  };
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const syscall = "syscall" in error ? error.syscall : undefined;
+  const message = "message" in error ? error.message : undefined;
 
   return (
-    maybeDnsError.syscall === "querySrv" ||
-    (typeof maybeDnsError.message === "string" &&
-      maybeDnsError.message.includes("querySrv"))
+    syscall === "querySrv" ||
+    (typeof message === "string" && message.includes("querySrv"))
   );
 };
 

@@ -1,5 +1,6 @@
 import {
   CLERK_SUBSCRIPTION_PLANS,
+  SUBSCRIPTION_PLAN_SLUGS,
   SUBSCRIPTION_LIMITS,
   type SubscriptionLimits,
   type SubscriptionPlan,
@@ -14,6 +15,15 @@ export type SubscriptionDetails = {
   limits: SubscriptionLimits;
 };
 
+const PAID_PLAN_PRIORITY = ["pro", "standard"] as const;
+
+const getSubscriptionDetails = (
+  plan: SubscriptionPlan,
+): SubscriptionDetails => ({
+  plan,
+  limits: SUBSCRIPTION_LIMITS[plan],
+});
+
 export const getSubscriptionFromHas = (
   has: PlanAuthorizationCheck,
 ): SubscriptionDetails => {
@@ -25,8 +35,17 @@ export const getSubscriptionFromHas = (
       ? "standard"
       : "free";
 
-  return {
-    plan,
-    limits: SUBSCRIPTION_LIMITS[plan],
-  };
+  return getSubscriptionDetails(plan);
+};
+
+export const getSubscriptionFromPlanSlugs = (
+  planSlugs: Iterable<string>,
+): SubscriptionDetails => {
+  const availablePlanSlugs = new Set(planSlugs);
+  const plan =
+    PAID_PLAN_PRIORITY.find((candidate) =>
+      availablePlanSlugs.has(SUBSCRIPTION_PLAN_SLUGS[candidate]),
+    ) ?? "free";
+
+  return getSubscriptionDetails(plan);
 };

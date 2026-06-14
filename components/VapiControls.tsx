@@ -1,8 +1,11 @@
 "use client";
-import useVapi, { type VoiceBook } from "@/hooks/useVapi";
-import Transcript from "@/components/Transcript";
+
 import { Mic, MicOff } from "lucide-react";
 import Image from "next/image";
+
+import Transcript from "@/components/Transcript";
+import useVapi, { type VoiceBook } from "@/hooks/useVapi";
+import { formatDuration } from "@/lib/utils/utils";
 
 type VapiControlsBook = VoiceBook & {
   coverURL: string;
@@ -26,19 +29,14 @@ const STATUS_DOT_CLASSES = {
   speaking: "vapi-status-dot-speaking",
 };
 
-const formatDuration = (seconds: number) => {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-};
-
 const VapiControls = ({
   book,
   voiceName,
+  initialMaxSessionMinutes,
 }: {
   book: VapiControlsBook;
   voiceName: string;
+  initialMaxSessionMinutes: number;
 }) => {
   const {
     status,
@@ -52,7 +50,7 @@ const VapiControls = ({
     stopSession,
     clearErrors,
     limitError,
-  } = useVapi(book);
+  } = useVapi(book, initialMaxSessionMinutes);
   const isStarting = status === "connecting" || status === "starting";
   const micLabel = isActive
     ? "Stop voice conversation"

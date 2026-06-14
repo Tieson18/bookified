@@ -25,6 +25,15 @@ const ERROR_NESTED_KEYS = [
   "data",
 ] as const;
 
+const NORMAL_CALL_END_REASONS = new Set([
+  "assistant-ended-call",
+  "assistant-ended-call-after-message-spoken",
+  "assistant-ended-call-with-hangup-task",
+  "assistant-said-end-call-phrase",
+  "exceeded-max-duration",
+  "silence-timed-out",
+]);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -142,7 +151,7 @@ export const getErrorText = (value: unknown, depth = 0): string => {
   if (value instanceof Error) {
     const cause =
       "cause" in value
-        ? getErrorText((value as Error & { cause: unknown }).cause, depth + 1)
+        ? getErrorText(value.cause, depth + 1)
         : "";
 
     return [value.name, value.message, cause].filter(Boolean).join(" ");
@@ -164,11 +173,67 @@ export const getErrorText = (value: unknown, depth = 0): string => {
 
 export const isMeetingEnded = (error: unknown): boolean => {
   const text = getErrorText(error).toLowerCase();
+  const isDailyEjection =
+    text.includes("daily-error") &&
+    (text.includes("ejection") || text.includes("ejected"));
 
   return (
     text.includes("meeting has ended") ||
     text.includes("meeting ended due to ejection") ||
+    isDailyEjection ||
     (text.includes("meeting ended") &&
       (text.includes("ejection") || text.includes("ejected")))
   );
+};
+
+export const getVapiEndedReasonMessage = (
+  endedReason: string | undefined,
+  expectedEnd: boolean,
+): string | null => {
+  if (!endedReason || expectedEnd || NORMAL_CALL_END_REASONS.has(endedReason)) {
+    return null;
+  }
+
+  if (endedReason === "customer-ended-call") {
+    return "The voice connection closed before the conversation could continue. Please try again.";
+  }
+
+  if (endedReason.includes("microphone")) {
+    return "The voice conversation could not access your microphone. Check the browser permission and try again.";
+  }
+
+  if (
+    endedReason.includes("subscription") ||
+    endedReason.includes("insufficient-credits") ||
+    endedReason.includes("quota-exceeded")
+  ) {
+    return "The voice service is temporarily unavailable because its provider account needs attention.";
+  }
+
+  if (
+    endedReason.includes("assistant-not") ||
+    endedReason.includes("invalid-assistant") ||
+    endedReason.includes("get-assistant")
+  ) {
+    return "The voice assistant configuration could not be loaded. Please try again later.";
+  }
+
+  if (endedReason.includes("voice")) {
+    return "The selected voice could not start. Please try again.";
+  }
+
+  if (endedReason.includes("transcriber")) {
+    return "Speech recognition could not start. Please try again.";
+  }
+
+  if (
+    endedReason.includes("llm") ||
+    endedReason.includes("model") ||
+    endedReason.startsWith("pipeline-error") ||
+    endedReason.includes(".error-")
+  ) {
+    return "The voice conversation ended because a provider failed to start. Please try again.";
+  }
+
+  return null;
 };

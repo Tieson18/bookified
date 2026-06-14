@@ -44,24 +44,22 @@ export type VapiSpeechUpdateMessage = {
 export type VapiStatusMessage = {
   type: "status-update";
   status: string;
+  endedReason?: string;
 };
 
-export type VapiErrorMessage = {
-  type: "error";
-  error: unknown;
+export type VapiCallStartProgressEvent = {
+  stage: string;
+  status: "started" | "completed" | "failed";
+  duration?: number;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
 };
 
-export type VapiCallStartFailedMessage = {
-  type: "call-start-failed";
-  error: unknown;
+export type VapiCallStartSuccessEvent = {
+  totalDuration: number;
+  callId?: string;
+  timestamp: string;
 };
-
-export type VapiMessage =
-  | VapiTranscriptMessage
-  | VapiSpeechUpdateMessage
-  | VapiStatusMessage
-  | VapiErrorMessage
-  | VapiCallStartFailedMessage;
 
 export type VapiEventHandlers = {
   onCallStart: () => void;
@@ -72,7 +70,3 @@ export type VapiEventHandlers = {
   onError: (error: unknown) => void;
   onCallStartFailed: (error: unknown) => void;
 };
-
-export type SessionStartResult =
-  | { success: true; sessionId: string | null }
-  | { success: false; error: string };
