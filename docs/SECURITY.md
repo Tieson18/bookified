@@ -5,11 +5,20 @@ recommended for Bookified.
 
 ## Reporting a Vulnerability
 
-<!-- TODO: Replace this placeholder with a monitored private security contact. -->
+Report suspected vulnerabilities privately by emailing
+[tieson360@gmail.com](mailto:tieson360@gmail.com) with the subject
+`Bookified security report`.
 
 Do not publish secrets, user PDFs, private transcripts, or exploit details in a
-public issue. Provide the affected route, impact, reproduction steps, and a
-safe proof of concept through a private project channel.
+public issue or discuss an unpatched vulnerability publicly. Include the
+affected route, impact, reproduction steps, and a safe proof of concept in the
+email.
+
+Expect an acknowledgement within three business days and an initial assessment
+or status update within seven business days. Please allow up to 90 days for
+coordinated disclosure unless a different timeline is agreed upon. Bookified
+does not currently offer a paid bug bounty, but responsible reports are
+appreciated and may be credited with the reporter's permission.
 
 ## Authentication Security
 
